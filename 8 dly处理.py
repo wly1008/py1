@@ -12,11 +12,7 @@ import calendar
 import numpy as np
 
 def read_data(file_paths):
-    dfs = []
-    for file_path in file_paths:
-        df = pd.read_csv(file_path, header=None)
-        dfs.append(df)
-    return pd.concat(dfs)
+    return  pd.concat([pd.read_csv(file_path, header=None) for file_path in file_paths])
 
 def get_num(x):
     
@@ -97,4 +93,4 @@ if __name__ == '__main__':
 
 
 
-	
+
