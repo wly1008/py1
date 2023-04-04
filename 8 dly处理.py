@@ -106,7 +106,7 @@ if __name__ == '__main__':
         doc = f'{Var}_{Year}.txt'
         out_path = os.path.join(file, doc)
         df_out.fillna('nan',inplace=True)
-        #df_out.to_csv(out_path,sep='\t',index=0,header=0)
+        df_out.to_csv(out_path,sep='\t',index=0,header=0)
         print(f'{Var}_{Year}')
 
 
