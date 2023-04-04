@@ -48,7 +48,6 @@ def process_data(x):
 
 # 分组各站点数据合并
 def func_site(x):
-    day_iter = iter(range(1,366+1))# <<<<<<<<<<<年天数迭代器
     year = int(x.year.iat[0])# <<<<<<<<<<<年
     df = pd.DataFrame()
     
@@ -57,7 +56,7 @@ def func_site(x):
     for Site,gro_data in gros:
 
         # 按月天数合并年数据
-        day_iter = iter(range(1,366+1))
+        day_iter = iter(range(1,366+1))# <<<<<<<<<<<年天数迭代器
         dfn_all = pd.DataFrame()
         for i in range(1,13):
             
