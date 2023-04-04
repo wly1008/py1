@@ -11,6 +11,26 @@ import re
 import calendar
 import numpy as np
 
+# def get_num(x):  
+#     est = 'f'
+#     nums = []
+#     ls = list(map(lambda x:str(x),list(range(0,10)))) + ['-']
+#     for i in range(len(x)):
+#         n = x[i]
+#         if est == 'y':
+#             if not n in ls:
+#                 end = i
+#                 num = x[start:end]
+#                 nums.append(num)
+#                 est = 'f' 
+#         elif n in ls:
+#             start = i
+#             est = 'y'            
+#         else:
+#             pass
+#     return pd.Series(nums,index=range(1,len(nums)+1))
+
+
 def read_data(file_paths):
     return  pd.concat([pd.read_csv(file_path, header=None) for file_path in file_paths])
 
@@ -86,7 +106,7 @@ if __name__ == '__main__':
         doc = f'{Var}_{Year}.txt'
         out_path = os.path.join(file, doc)
         df_out.fillna('nan',inplace=True)
-        df_out.to_csv(out_path,sep='\t',index=0,header=0)
+        #df_out.to_csv(out_path,sep='\t',index=0,header=0)
         print(f'{Var}_{Year}')
 
 
