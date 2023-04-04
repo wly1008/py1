@@ -32,9 +32,6 @@ def get_num(x):
     return pd.Series(nums,index=range(1,len(nums)+1))
 '''
 
-def read_data(file_paths):
-    return  pd.concat([pd.read_csv(file_path, header=None) for file_path in file_paths])
-
 def get_num(x):
     
     data = re.findall(r'-?\d+',x)
@@ -92,7 +89,7 @@ if __name__ == '__main__':
     output_dir = r'E:\Python\pythonlx\8 dly处理\结果'
     
     
-    df = read_data(file_paths)
+    df = pd.concat([pd.read_csv(file_path, header=None) for file_path in file_paths])
     df_day = process_data(df)
     # 按年份、变量分组
     gros = df_day.groupby(['year','variable'])
