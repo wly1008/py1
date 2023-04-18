@@ -13,7 +13,7 @@ import numpy as np
 
 '''
 def get_num(x):  
-    x = x + '/'
+    x = str(x) + '/'
     est = 'f'
     nums = []
     ls = list(map(lambda x:str(x),list(range(0,10)))) + ['-']
