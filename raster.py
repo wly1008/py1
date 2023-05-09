@@ -11,7 +11,7 @@ import numpy as np
 from rasterio.enums import Resampling
 
 
-def func(path,n = 1,tran = True, nan = np.nan, resampling = (False, 'bilinear'), print_ = False):
+def read(path,n = 1,tran = True, nan = np.nan, resampling = (False, 'bilinear'), print_ = False):
     '''
    
     
