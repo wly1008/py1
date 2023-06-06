@@ -31,7 +31,7 @@ def get(src,attrs):
     
 
 def read(path_tif, n=1, tran=True, nan=np.nan, dtype=np.float64, 
-         re_shape=False, re_scale=False, re_len=False, how='nearest',printf=False):
+         re_shape=False, re_scale=False, re_size=False, how='nearest',printf=False):
     '''
 
     path : string
@@ -48,20 +48,20 @@ def read(path_tif, n=1, tran=True, nan=np.nan, dtype=np.float64,
     ---------------------------------------------------------------------------
     单波段栅格
     
-    重采样参数（re_shape=False, re_scale=False, re_len=False, how='nearest',printf=False）
+    重采样参数(re_shape=False, re_scale=False, re_len=False, how='nearest',printf=False)
     
     
     
     re_shape:形状重采样
     (count, height, width)
     
-    re_len:大小重采样
+    re_size:大小重采样
     (xsize,ysize)
     
     re_scale:倍数重采样
     scale = 目标边长大小/原数据边长大小
     
-    ---how---(str or int)
+    how:重采样方法(str or int)
     默认'nearest'
     
     (部分)
@@ -83,17 +83,17 @@ def read(path_tif, n=1, tran=True, nan=np.nan, dtype=np.float64,
 
     def updata():  #<<<<<<<<<更新函数
     
-        if shape != shape_aim:
+        if shape != out_shape:
             
             if printf:
                 print(shape, printf)
             
             bounds = {'west': west, 'south': south, 'east': east,
-                      'north': north, 'height': shape_aim[1], 'width': shape_aim[2]}
+                      'north': north, 'height': out_shape[1], 'width': out_shape[2]}
 
             transform = rasterio.transform.from_bounds(**bounds)
 
-            profile.data.update({'height': shape_aim[1], 'width': shape_aim[2], 'transform': transform})
+            profile.data.update({'height': out_shape[1], 'width': out_shape[2], 'transform': transform})
             
             if type(how) is int:
                 resampling = how
@@ -101,7 +101,7 @@ def read(path_tif, n=1, tran=True, nan=np.nan, dtype=np.float64,
                 resampling = getattr(Resampling, how)
             
             
-            data = src.read(out_shape=shape_aim, resampling=resampling).astype(dtype)
+            data = src.read(out_shape=out_shape, resampling=resampling).astype(dtype)
         else:
             data = src.read().astype(dtype)
             pass    
@@ -117,38 +117,37 @@ def read(path_tif, n=1, tran=True, nan=np.nan, dtype=np.float64,
     shape = (count, height, width)
     nodata = dtype(nodata)
     
-    
+    # 重采样
     if re_shape:
-        shape_aim = re_shape
+        out_shape = re_shape
         
         # 更新矩阵、profile、shape
         data = updata()
-        shape = shape_aim
+        shape = out_shape
     
     
-    elif re_len:
-        xsize,ysize = re_len
-        shape_aim = (count,int((north-south)/ysize),int((east-west)/xsize))
+    elif re_size:
+        xsize,ysize = re_size
+        out_shape = (count,int((north-south)/ysize),int((east-west)/xsize))
         
         # 更新
         data = updata()
-        shape = shape_aim
-    
+        shape = out_shape
     
     
     elif re_scale:
         scale = re_scale
-        shape_aim = (count, int(height/scale), int(width/scale))
+        out_shape = (count, int(height/scale), int(width/scale))
         
         # 更新
         data = updata()
-        shape = shape_aim
+        shape = out_shape
     
 
     else:
-        data = src.read().astype(dtype)
+        data = src.read().astype(dtype)  #<<<<<<矩阵
     
-    
+    # 变形
     if tran:
         data = data.reshape(-1, 1)
     else:
@@ -207,7 +206,6 @@ def mask(path_tif, path_mask, tif_path):
     df = df_tif[mask]
 
     out(tif_path, df, shape, pro)
-
 
 
 
