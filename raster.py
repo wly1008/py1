@@ -77,7 +77,7 @@ def read(path_tif, n=1, tran=True, nan=np.nan, dtype=np.float64,
     
     
     Returns:
-        栅格矩阵（单列or原型）；meta;shape
+        栅格矩阵（单列or原型）；profile;shape
 
     '''
 
