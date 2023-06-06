@@ -16,7 +16,7 @@ def get_num(x):
     x = str(x) + '/'
     est = 'f'
     nums = []
-    ls = list(map(lambda x:str(x),list(range(0,10)))) + ['-']
+    ls = [str(i) for i in range(10)] + ['-']
     for i in range(len(x)):
         n = x[i]
         if est == 'y':
