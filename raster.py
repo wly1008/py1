@@ -219,7 +219,7 @@ def read(path_in, n=1, tran=True, nan=np.nan, dtype=np.float64,
         print('n=1 or 2 or 3')
 
 
-def out(out_path, data, shape, pro):
+def out(out_path, data, pro, shape):
     '''
     操作函数
     ---------
@@ -263,7 +263,7 @@ def mask(path_in, path_mask, out_path):
 
     df = df_tif[mask]
 
-    out(out_path, df, shape, pro)
+    out(out_path, df, pro, shape)
 
 
 
@@ -286,7 +286,7 @@ def resampling(path_in, out_path, nan=np.nan, dtype=np.float64,
                             how=how, printf=printf)
     
     
-    out(out_path, data, shape, pro)
+    out(out_path, data, pro, shape)
     
     
 
