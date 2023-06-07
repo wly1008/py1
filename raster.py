@@ -243,6 +243,9 @@ def resampling(path_in, out_path, nan=np.nan, dtype=np.float64,
     
     '''
     操作函数，直接输出
+    ------------------------------------
+    
+    重采样，参数详见read、out
     
     '''
 
