@@ -16,14 +16,26 @@ from rasterio.enums import Resampling
 
 
 
-def get(src,*attrs):
+def get(src,*args):
     
-    name = locals()
+    '''
+    获得类（src）中的相应（args）属性
+    '''
+    
+    # name = locals()
+    
+    # returns = []
+    # for arg in args:
+    #     name[arg] = getattr(src,arg)
+    #     returns.append(name[arg])
+    
     
     returns = []
-    for attr in attrs:
-        name[attr] = getattr(src,attr)
-        returns.append(name[attr])
+    for arg in args:
+        attr = getattr(src, arg)
+        returns.append(attr)
+    
+    
     if len(returns) == 1:
         returns = returns[0]
     
@@ -33,10 +45,12 @@ def get(src,*attrs):
 
 
 
-def get_RasterArrt(path_in,*attrs):
-    
+def get_RasterArrt(path_in,*args):
+    '''
+    获得栅格文件（path_in）中的相应（args）属性
+    '''
     with rasterio.open(path_in) as src:
-        return get(src,*attrs)
+        return get(src,*args)
 
 
 
@@ -62,23 +76,28 @@ def read(path_in, n=1, tran=True, nan=np.nan, dtype=np.float64,
     
     
     
-    re_shape:形状重采样
+    re_shape:形状重采样(tuple)
     (count, height, width)
     
-    re_size:大小重采样
-    (xsize,ysize)
+    re_size:大小重采样(tuple or number)
+    (xsize,ysize) or size
     
-    re_scale:倍数重采样
-    scale = 目标边长大小/原数据边长大小
+    re_scale:倍数重采样(number)
+    scale = 目标边长大小/源数据边长大小
     
-    ---how---(str or int)
-    默认'nearest'
+    
+    how:(str or int) , optional.
+    重采样方式，The default is nearest.
     
     (部分)
     mode:众数，6;
     nearest:临近值，0;
     bilinear:双线性，1;
     cubic_spline:三次卷积，3。
+    ...其余见rasterio.enums.Resampling
+    
+    
+    
     
     printf : 任意值,optional.
         如果发生重采样，则会打印原形状及输入值。The default is False.
@@ -93,17 +112,18 @@ def read(path_in, n=1, tran=True, nan=np.nan, dtype=np.float64,
 
     def update():  #<<<<<<<<<更新函数
     
-        if shape != shape_aim:
+        if shape != out_shape:
             
-            if printf:
-                print(shape, printf)
+            if not printf is False:
+                
+                print(f'{printf}的原形状为{shape}')
             
             bounds = {'west': west, 'south': south, 'east': east,
-                      'north': north, 'height': shape_aim[1], 'width': shape_aim[2]}
+                      'north': north, 'height': out_shape[1], 'width': out_shape[2]}
 
             transform = rasterio.transform.from_bounds(**bounds)
 
-            profile.data.update({'height': shape_aim[1], 'width': shape_aim[2], 'transform': transform})
+            profile.data.update({'height': out_shape[1], 'width': out_shape[2], 'transform': transform})
             
             if type(how) is int:
                 _resampling = how
@@ -111,10 +131,10 @@ def read(path_in, n=1, tran=True, nan=np.nan, dtype=np.float64,
                 _resampling = getattr(Resampling, how)
             
             
-            data = src.read(out_shape=shape_aim, resampling=_resampling).astype(dtype)
+            data = src.read(out_shape=out_shape, resampling=_resampling).astype(dtype)
         else:
             data = src.read().astype(dtype)
-            pass    
+                
         return data
     
     
@@ -124,40 +144,49 @@ def read(path_in, n=1, tran=True, nan=np.nan, dtype=np.float64,
     nodata, profile, count, height, width,transform = get(src,*('nodata', 'profile', 'count', 'height', 'width','transform'))
     
     west, south, east, north = rasterio.transform.array_bounds(height, width, transform)
-    shape = (count, height, width)
     nodata = dtype(nodata)
-    
+    shape = (count, height, width)
+
+
+
+    # 获得矩阵;更新profile、shape
     
     if re_shape:
-        shape_aim = re_shape
-        
-        # 更新矩阵、profile、shape
-        data = update()
-        shape = shape_aim
-    
-    
-    elif re_size:
-        xsize,ysize = re_size
-        shape_aim = (count,int((north-south)/ysize),int((east-west)/xsize))
+        out_shape = re_shape
         
         # 更新
         data = update()
-        shape = shape_aim
+        shape = out_shape
+    
+    
+    elif re_size:
+        
+        if (type(re_size) == int) | (type(re_size) == float):
+            xsize = re_size
+            ysize = re_size
+        else:
+            xsize,ysize = re_size
+        out_shape = (count,int((north-south)/ysize),int((east-west)/xsize))
+        
+        # 更新
+        data = update()
+        shape = out_shape
     
     
     
     elif re_scale:
         scale = re_scale
-        shape_aim = (count, int(height/scale), int(width/scale))
+        out_shape = (count, int(height/scale), int(width/scale))
         
         # 更新
         data = update()
-        shape = shape_aim
+        shape = out_shape
     
 
     else:
         data = src.read().astype(dtype)
     
+    profile.data.update({'nodata': nan, 'dtype': dtype})
     
     # 处理无效值
     data = data.reshape(-1, 1)
@@ -171,7 +200,10 @@ def read(path_in, n=1, tran=True, nan=np.nan, dtype=np.float64,
         data = np.array(data).reshape(shape)
         if shape[0] == 1:
             data = pd.DataFrame(data[0])
-    
+
+
+
+
     src.close()
     
     
@@ -249,7 +281,7 @@ def resampling(path_in, out_path, nan=np.nan, dtype=np.float64,
     
     '''
 
-    data, pro, shape = read(path_in, nan=nan, dtype=dtype,
+    data, pro, shape = read(path_in, n=3, nan=nan, dtype=dtype,
                             re_size=re_size, re_scale=re_scale, re_shape=re_shape,
                             how=how, printf=printf)
     
@@ -257,7 +289,6 @@ def resampling(path_in, out_path, nan=np.nan, dtype=np.float64,
     out(out_path, data, shape, pro)
     
     
-
 
 
 
