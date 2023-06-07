@@ -52,7 +52,7 @@ def read(path_in, n=1, tran=True, nan=np.nan, dtype=np.float64,
         是否变为单列. The default is True.
     nan : optional
         无效值设置.The default is np.nan.
-    dtype : optional
+    dtype : 数据类型转换函数，optional
         矩阵值的格式. The default is np.float64.
     
     ---------------------------------------------------------------------------
