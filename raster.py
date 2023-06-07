@@ -228,9 +228,10 @@ def out(out_path, data, pro, shape):
 
     '''
     data = np.array(data).reshape(shape)
-
+    bend = shape[0]
     with rasterio.open(out_path, 'w', **pro) as src:
-        src.write(data)
+        for i in range(bend):
+            src.write(data[i],i+1)
 
 
 def mask(path_in, path_mask, out_path):
