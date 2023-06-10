@@ -69,7 +69,7 @@ def evals(*runs,**kwargs):
     returns = []
     for run in runs:
         
-        if isiterable(run) & (not(type(run) is str)):
+        if isiterable(run) & (type(arg) != str):
             returns.append([evals(i) for i in run])
         else:
             returns.append(eval(run))
