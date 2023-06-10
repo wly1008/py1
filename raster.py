@@ -5,7 +5,7 @@ Created on Fri Jun  9 09:31:52 2023
 @author: wly
 """
 
-import .code as cd
+from . import code as cd
 import re
 from functools import partial
 import rasterio
