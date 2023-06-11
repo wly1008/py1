@@ -29,7 +29,7 @@ def get_RasterArrt(raster_in, *args,ds={}, **kwargs):
     kwargs: 字典值获得对应属性所需操作，可为表达式，非自身类函数调用时src不可省略。
             必须使用src代表源数据。
             
-            合并属性返回类型为list. e.g.'raster_size': ('height', 'width') -> ['height', 'width']
+            合并属性返回类型为list. e.g.'raster_size': ('height', 'width') -> [900, 600]
             如需特定属性请用函数. e.g. 'raster_size': r"(src.height, src.width)" or r"pd.Serise([src.height, src.width])"
    （dic中有部分，按需求添加，可直接修改dic,效果一致,getattrs中ds参数是为传递操作所需变量,如在dic中添加ds需考虑修改函数参数名及系列变动）
     
@@ -39,9 +39,19 @@ def get_RasterArrt(raster_in, *args,ds={}, **kwargs):
 
     
     """
+    
+    ## 输入变量优先级高
+    # now = globals()
+    # now.update(ds)
+    # ds = now
+    
+    # 此文件变量优先级高
     ds.update(globals())
+    
+    
     dic = {'raster_size': r"(src.height, src.width)", 'cell_size': ('xsize', 'ysize'),
-           'bends': 'count', 'xsize': r'transform[0]', 'ysize': r'abs(src.transform[4])'}
+           'bends': 'count', 'xsize': r'transform[0]', 'ysize': r'abs(src.transform[4])',
+           'values': 'src.read().astype(dtype)','df':'read(src)'}
     _getattrs = partial(cd.getattrs, **dic)
 
     if type(raster_in) is rasterio.io.DatasetReader:
@@ -56,12 +66,12 @@ def get_RasterArrt(raster_in, *args,ds={}, **kwargs):
             return _getattrs(src, *args, ds=ds, **kwargs)
 
 
-def read(path_in, n=1, tran=True, nan=np.nan, dtype=np.float64, driver='GTiff', 
+def read(raster_in, n=1, tran=True, nan=np.nan, dtype=np.float64, driver='GTiff', 
          re_shape=False, re_scale=False, re_size=False, how='nearest', printf=False):
     """
 
-    path : string
-        地址.
+    raster_in : 
+        栅格地址或栅格数据
     n : 1 or 2 or 3, optional.
         返回几个值. The default is 1.
     tran : bool, optional.
@@ -136,8 +146,12 @@ def read(path_in, n=1, tran=True, nan=np.nan, dtype=np.float64, driver='GTiff',
             data = src.read().astype(dtype)
 
         return data
-
-    src = rasterio.open(path_in)
+    
+    
+    if type(path_in) is rasterio.io.DatasetReader:
+        src = path_in  
+    else:
+        src = rasterio.open(path_in)
 
     # 取出所需参数
     nodata, profile, count, height, width, transform = get_RasterArrt(src, *(
@@ -244,16 +258,16 @@ def mask(path_in, path_mask, out_path):
     df_tif, pro, shape = read(path_in, 3)
     df_mask, pro_m, shape_m = read(path_mask, 3)
 
-    arrtname = ('crs', 'raster_size', 'transform')
+    arrtnames = ('crs', 'raster_size', 'transform')
 
 
-    arrt = get_RasterArrt(path_in, arrtname)
-    arrt_m = get_RasterArrt(path_mask, arrtname)
+    arrt = get_RasterArrt(path_in, arrtnames)
+    arrt_m = get_RasterArrt(path_mask, arrtnames)
 
     if not arrt == arrt_m:
         for i in range(len(arrt)):
             if arrt[i] != arrt_m[i]:
-                print(f'{arrtname[i]}不同')
+                print(f'{arrtnames[i]}不同')
 
 
 
@@ -286,8 +300,6 @@ def resampling(path_in, out_path, nan=np.nan, dtype=np.float64, driver='GTiff',
                             how=how, printf=printf)
 
     out(out_path, data, pro, shape)
-
-
 
 
 
