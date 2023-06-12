@@ -86,27 +86,9 @@ def evals(*runs,**kwargs):
     return returns
 
 
-def getattrs(src, *args, run=True , ds={},**kwargs):
+def getattrs(src, *args, ds={},**kwargs):
     
-    
-    # 获得类中存在的属性<<<<<<<< run==False
-    if not run:
-        returns = []
-        for arg in args:
-            if isiterable(arg) & (type(arg) != str):
-                # 递归
-                return getattrs(src, *arg, run=False)
-            else:
-                # 获取
-                returns.append(getattr(src, arg))
-        if len(returns) == 1:
-            returns =returns[0]
-        return returns
-    
-    
-    # 获得需要函数操作获得的属性，本就存在的也能获取<<<<<<<< run==True
-    
-    
+
     
     # 在ds中输入__attr{n}变量，可能会导致运行变量冲突
     
