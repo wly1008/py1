@@ -5,14 +5,14 @@ Created on Fri Jun  9 09:31:52 2023
 @author: wly
 """
 
-from . import code as cd
+import mycode.code as cd
 import re
 from functools import partial
 import rasterio
 import pandas as pd
 import numpy as np
 from rasterio.enums import Resampling
-
+import os,sys
 
 
 
@@ -23,10 +23,11 @@ def get_RasterArrt(raster_in, *args,ds={}, **kwargs):
     
     raster_in: 栅格地址或栅格数据
     args: 所需属性或函数（类中存在的，输入属性名、函数名即可）
-    ds: （dict）传递操作所需变量,可将全局变量（globals()先赋予一个变量，直接填入参数可能会报错）输入，默认变量为此文件及cd文件的全局变量
+    ds: （dict）传递操作所需变量,可将全局变量（globals()先赋予一个变量，直接将globals()填入参数可能会报错）输入，默认变量为此文件及cd文件的全局变量
     
     
-    kwargs: 字典值获得对应属性所需操作，可为表达式，非自身类函数调用时src不可省略。
+    kwargs: 字典值获得对应属性所需操作，可为表达式，默认参数以字典形式写在“//ks//”之后
+            非自身类函数调用时及自身在dic、kwargs中定义的属性调用时，src不可省略。
             必须使用src代表源数据。
             
             合并属性返回类型为list. e.g.'raster_size': ('height', 'width') -> [900, 600]
@@ -51,7 +52,8 @@ def get_RasterArrt(raster_in, *args,ds={}, **kwargs):
     
     dic = {'raster_size': r"(src.height, src.width)", 'cell_size': ('xsize', 'ysize'),
            'bends': 'count', 'xsize': r'transform[0]', 'ysize': r'abs(src.transform[4])',
-           'values': 'src.read().astype(dtype)','df':'read(src)'}
+           'values': r'src.read().astype(dtype)//ks//{"dtype":np.float64}',
+           'df':r'pd.DataFrame(src.values.reshape(-1, 1))'}
     _getattrs = partial(cd.getattrs, **dic)
 
     if type(raster_in) is rasterio.io.DatasetReader:
@@ -148,10 +150,10 @@ def read(raster_in, n=1, tran=True, nan=np.nan, dtype=np.float64, driver='GTiff'
         return data
     
     
-    if type(path_in) is rasterio.io.DatasetReader:
-        src = path_in  
+    if type(raster_in) is rasterio.io.DatasetReader:
+        src = raster_in 
     else:
-        src = rasterio.open(path_in)
+        src = rasterio.open(raster_in)
 
     # 取出所需参数
     nodata, profile, count, height, width, transform = get_RasterArrt(src, *(
@@ -300,13 +302,6 @@ def resampling(path_in, out_path, nan=np.nan, dtype=np.float64, driver='GTiff',
                             how=how, printf=printf)
 
     out(out_path, data, pro, shape)
-
-
-
-
-
-
-
 
 
 
