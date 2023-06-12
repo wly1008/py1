@@ -63,6 +63,7 @@ def get_RasterArrt(raster_in, *args,ds={}, **kwargs):
            'values': r'src.read().astype(dtype)//ks//{"dtype":np.float64}',
            'df':r'pd.DataFrame(src.values.reshape(-1, 1))'}
     _getattrs = partial(cd.getattrs, **dic)
+    
 
     if type(raster_in) is rasterio.io.DatasetReader:
         src = raster_in
