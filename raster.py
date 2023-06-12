@@ -16,6 +16,14 @@ import os,sys
 
 
 
+
+
+
+
+
+
+
+
 def get_RasterArrt(raster_in, *args,ds={}, **kwargs):
     
     """
@@ -66,6 +74,27 @@ def get_RasterArrt(raster_in, *args,ds={}, **kwargs):
         with rasterio.open(path_in) as src:
             
             return _getattrs(src, *args, ds=ds, **kwargs)
+
+
+
+
+
+def add_attrs_raster(src,ds={},**kwargs):
+    dic = {'raster_size': r"(src.height, src.width)", 'cell_size': ('xsize', 'ysize'),
+           'bends': 'count', 'xsize': r'transform[0]', 'ysize': r'abs(src.transform[4])',
+           'values': r'src.read().astype(dtype)//ks//{"dtype":np.float64}',
+           'df':r'pd.DataFrame(src.values.reshape(-1, 1))'}
+    
+    dic.update(kwargs)
+    
+    data = globals()
+    data.update(ds)
+    ds = data
+    
+    cd.add_attrs(src, run=True, ds=ds,**dic)
+
+
+
 
 
 def read(raster_in, n=1, tran=True, nan=np.nan, dtype=np.float64, driver='GTiff', 
@@ -158,6 +187,8 @@ def read(raster_in, n=1, tran=True, nan=np.nan, dtype=np.float64, driver='GTiff'
     # 取出所需参数
     nodata, profile, count, height, width, transform = get_RasterArrt(src, *(
                         'nodata', 'profile', 'count', 'height', 'width', 'transform'))
+    
+    
 
     west, south, east, north = rasterio.transform.array_bounds(height, width, transform)
     nodata = dtype(nodata)
@@ -307,6 +338,30 @@ def resampling(path_in, out_path, nan=np.nan, dtype=np.float64, driver='GTiff',
 
 
 
+
+
+
+
+    
+    
+    
+    
+    
+    
+    
+    
+
+dic = {'raster_size': r"(src.height, src.width)", 'cell_size': ('xsize', 'ysize'),
+       'bends': 'count', 'xsize': r'transform[0]', 'ysize': r'abs(src.transform[4])',
+       'values': r'src.read().astype(dtype)//ks//{"dtype":np.float64}',
+       'df':r'pd.DataFrame(src.values.reshape(-1, 1))'}
+
+
+path_in = r'F:\PyCharm\pythonProject1\arcmap\007那曲市\data\eva平均\eva_2.tif'
+src = rasterio.open(path_in)
+
+
+get_RasterArrt(src,*['bends', 'cell_size', 'df', 'raster_size', 'values', 'xsize', 'ysize'])
 
 
 
