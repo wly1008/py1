@@ -62,15 +62,13 @@ def isiterable(x):
 
 
 def evals(*runs,**kwargs):
-    """
-    批量eval
-    """
+    
     returns = []
-    for _run in runs:
+    for run in runs:
         
-        if isiterable(_run) & (type(_run) != str):
+        if isiterable(run) & (type(run) != str):
             # 递归
-            returns.append([evals(i,**kwargs) for i in _run])
+            returns.append([evals(i,**kwargs) for i in run])
         else:
             # # 解包变量
             # for k,v in kwargs.items():
@@ -78,7 +76,7 @@ def evals(*runs,**kwargs):
             
             
             # 操作
-            returns.append(eval(_run,globals(),kwargs))
+            returns.append(eval(run,globals(),kwargs))
             # returns.append(eval(_run))
 
     if len(returns) == 1:
@@ -87,6 +85,8 @@ def evals(*runs,**kwargs):
 
 
 def getattrs(src, *args, ds={},**kwargs):
+    
+    # 在ds中输入__attr{n}变量，可能会导致运行变量冲突
     
     ds.update({'src':src})
     
@@ -98,19 +98,45 @@ def getattrs(src, *args, ds={},**kwargs):
     ds = data
     
     
-    # 对需要的操作（args）进行整理
+    # 对需要的操作（run）进行整理
     runs = []
     for arg in args:
-
-        while arg in kwargs:
-            arg = kwargs[arg]
+        
+        
+        # 自定义属性处理
+        add_attr = {f'src.{k}':v for k,v in kwargs.items() if f'src.{k}' in arg}
+        n = 0
+        while ((arg in kwargs) or add_attr):
+            try:
+                
+                arg = kwargs[arg]
+                add_attr = {f'src.{k}':v for k,v in kwargs.items() if f'src.{k}' in arg}
+            except:
+                # 需要函数操作的属性
+                for attr,attr_run in add_attr.items(): 
+                    n += 1
+                    
+                    attr_value = getattrs(src,attr_run,ds=ds,**kwargs)
+                    
+                    arg = arg.replace(attr,f'__attr{n}')
+                    ds.update({f'__attr{n}':attr_value})
+                break
+        
+        # 默认变量处理
+        if (r'//ks//' in arg):
+            arg,ks = arg.split(r'//ks//')
+            
+            ks = eval(ks)
+            ks.update(ds)
+            ds = ks
+            
         
         if isiterable(arg) & (type(arg) != str):
             # 递归
             return getattrs(src, *arg,**kwargs)
         else:
             # 整理
-            run = f'src.{arg}' if not ('src' in arg) else arg
+            run = f'src.{arg}' if (not ('src' in arg)) & (n==0) else arg
             
             runs.append(run)
     
@@ -123,11 +149,12 @@ def getattrs(src, *args, ds={},**kwargs):
 
 
 
-
-
 """
 字典相关函数
 """
+        
+
+
 
 # 查找
 def findAll(target, dictData, notFound=[]):
