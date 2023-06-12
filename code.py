@@ -94,7 +94,7 @@ def getattrs(src, *args, ds={},**kwargs):
     
     ds.update({'src':src})
     
-    # ds,接收上一文件的(全局)变量,注销此段，则输入变量优先级更高。
+    # ds,接收上一文件的(全局、参数)变量,注销此段，则输入变量优先级更高。
     globals_old = set(ds)
     globals_now = set(globals())
     need_add = globals_old-globals_now
