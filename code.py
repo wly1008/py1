@@ -61,6 +61,8 @@ def isiterable(x):
         return False
 
 
+
+
 def evals(*runs,**kwargs):
     
     returns = []
@@ -84,7 +86,27 @@ def evals(*runs,**kwargs):
     return returns
 
 
-def getattrs(src, *args, ds={},**kwargs):
+def getattrs(src, *args, run=True , ds={},**kwargs):
+    
+    
+    # 获得类中存在的属性<<<<<<<< run==False
+    if not run:
+        returns = []
+        for arg in args:
+            if isiterable(arg) & (type(arg) != str):
+                # 递归
+                return getattrs(src, *arg, run=False)
+            else:
+                # 获取
+                returns.append(getattr(src, arg))
+        if len(returns) == 1:
+            returns =returns[0]
+        return returns
+    
+    
+    # 获得需要函数操作获得的属性，本就存在的也能获取<<<<<<<< run==True
+    
+    
     
     # 在ds中输入__attr{n}变量，可能会导致运行变量冲突
     
@@ -144,6 +166,35 @@ def getattrs(src, *args, ds={},**kwargs):
     return evals(*runs,**ds)
 
 
+def add_attrs(src, run=False, ds={}, **attrs_dict):
+    """
+    向类（src）中添加属性
+
+    Parameters
+    ----------
+    src : 输入类
+    run : 是否启用表达式操作函数.  The default is False.
+    ds : TYPE, optional
+        表达式所需变量，为空则只有此文件全局变量可用. The default is {}.
+    
+    attrs_dict : (dict)
+        属性：   对应操作表达式(run为True)
+              or        对应值(run为False)
+
+    Returns
+    -------
+    None.
+
+    """
+    
+    
+    for key,_run in attrs_dict.items():
+        if run:
+            value = getattrs(src,_run,ds=ds,**attrs_dict)
+        else:
+            value = _run
+        
+        setattr(src,key,value)
 
 
 
@@ -201,6 +252,42 @@ def ungroup(dictData,dtype = False):
 
 
 
+    
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
 
 
 
