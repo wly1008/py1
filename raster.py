@@ -34,7 +34,7 @@ def get_RasterArrt(raster_in, *args,ds={}, **kwargs):
     ds: （dict）传递操作所需变量,可将全局变量（globals()先赋予一个变量，直接将globals()填入参数可能会报错）输入，默认变量为此文件及cd文件的全局变量
     
     
-    kwargs: 字典值获得对应属性所需操作，可为表达式，默认参数以字典形式写在“//ks//”之后
+    kwargs: 字典值获得对应属性所需操作，可为表达式，默认参数以字典形式写在“//ks//”之后，在ds中输入相应变量可替代默认参数
             非自身类函数调用时及自身在dic、kwargs中定义的属性调用时，src不可省略。
             必须使用src代表源数据。
             
@@ -80,6 +80,18 @@ def get_RasterArrt(raster_in, *args,ds={}, **kwargs):
 
 
 def add_attrs_raster(src,ds={},**kwargs):
+    
+    """
+    向栅格数据中添加属性
+    
+    src:栅格数据
+    ds:表达式所需变量
+    kwargs:属性：对应表达式（"//ks//后为默认参数，在ds中输入相应变量可替代默认参数"）
+    
+    
+    
+    
+    """
     dic = {'raster_size': r"(src.height, src.width)", 'cell_size': ('xsize', 'ysize'),
            'bends': 'count', 'xsize': r'transform[0]', 'ysize': r'abs(src.transform[4])',
            'values': r'src.read().astype(dtype)//ks//{"dtype":np.float64}',
