@@ -8,8 +8,8 @@ Created on Mon May  8 20:26:45 2023
 import os
 import numpy as np
 import pandas as pd
-from scipy.spatial import cKDTree as KDTree
-    # http://docs.scipy.org/doc/scipy/reference/spatial.html
+import sys
+
 
 # nnan = []
 def get_num(x,lst_and = []):   
@@ -51,6 +51,8 @@ def get_num(x,lst_and = []):
 #         dill.dump(data,f)
 
 
+
+
 # -----------------------------------------------------------------------------------------
 
 def isiterable(x):
@@ -59,7 +61,6 @@ def isiterable(x):
         return True
     except:
         return False
-
 
 
 
@@ -88,9 +89,6 @@ def evals(*runs,**kwargs):
 
 def getattrs(src, *args, ds={},**kwargs):
     
-
-    
-    # 在ds中输入__attr{n}变量，可能会导致运行变量冲突
     
     ds.update({'src':src})
     
@@ -108,31 +106,33 @@ def getattrs(src, *args, ds={},**kwargs):
         
         
         # 自定义属性处理
-        add_attr = {f'src.{k}':v for k,v in kwargs.items() if f'src.{k}' in arg}
-        n = 0
+        add_attr = {k:v for k,v in kwargs.items() if f'src.{k}' in arg}
+        # n = 0
         while ((arg in kwargs) or add_attr):
             try:
                 
                 arg = kwargs[arg]
-                add_attr = {f'src.{k}':v for k,v in kwargs.items() if f'src.{k}' in arg}
+                add_attr = {k:v for k,v in kwargs.items() if f'src.{k}' in arg}
             except:
-                # 需要函数操作的属性
+                # 需要函数表达式操作的属性
                 for attr,attr_run in add_attr.items(): 
-                    n += 1
                     
+                    # n += 1
+                    # if hasattr(src, attr) | (not(amend)):
+                    #     continue
                     attr_value = getattrs(src,attr_run,ds=ds,**kwargs)
-                    
-                    arg = arg.replace(attr,f'__attr{n}')
-                    ds.update({f'__attr{n}':attr_value})
+                    setattr(src,attr,attr_value)
+                    # arg = arg.replace(attr,f'__attr{n}')
+                    # ds.update({f'__attr{n}':attr_value})
                 break
         
-        # 默认变量处理
+        # 参数处理
         if (r'//ks//' in arg):
             arg,ks = arg.split(r'//ks//')
             
-            ks = eval(ks)
-            ks.update(ds)
-            ds = ks
+            ks = eval(ks)  #<<<<<<取出默认参数
+            ks.update(ds)  #<<<<<<输入参数覆盖默认参数
+            ds = ks  
             
         
         if isiterable(arg) & (type(arg) != str):
@@ -140,7 +140,8 @@ def getattrs(src, *args, ds={},**kwargs):
             return getattrs(src, *arg,**kwargs)
         else:
             # 整理
-            run = f'src.{arg}' if (not ('src' in arg)) & (n==0) else arg
+            # run = f'src.{arg}' if (not ('src' in arg)) & (n==0) else arg
+            run = f'src.{arg}' if not ('src' in arg) else arg
             
             runs.append(run)
     
@@ -170,13 +171,13 @@ def add_attrs(src, run=False, ds={}, **attrs_dict):
     """
     
     
-    for key,_run in attrs_dict.items():
+    for attr,attr_run in attrs_dict.items():
         if run:
-            value = getattrs(src,_run,ds=ds,**attrs_dict)
+            value = getattrs(src,attr_run,ds=ds,**attrs_dict)
         else:
-            value = _run
+            value = attr_run
         
-        setattr(src,key,value)
+        setattr(src,attr,value)
 
 
 
