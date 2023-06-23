@@ -100,41 +100,41 @@ def add_attrs_raster(src, ds={}, **kwargs):
 
 
 
-def window(raster_in,shape):
+# def window(raster_in,shape):
     
-    src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
+#     src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
     
-    xsize,xend = src.width//shape[1], src.width%shape[1]
-    ysize,yend = src.height//shape[0], src.height%shape[0]
+#     xsize,xend = src.width//shape[1], src.width%shape[1]
+#     ysize,yend = src.height//shape[0], src.height%shape[0]
     
     
-    y_off = 0
-    windows = []
-    for ax0 in range(shape[0]):
+#     y_off = 0
+#     windows = []
+#     for ax0 in range(shape[0]):
         
-        x_off = 0
+#         x_off = 0
         
-        if (ax0 == (shape[0]-1)) & (yend != 0):
-            height = yend
-        else:
-            height = ysize
+#         if (ax0 == (shape[0]-1)) & (yend != 0):
+#             height = yend
+#         else:
+#             height = ysize
         
         
-        for ax1 in range(shape[1]):
+#         for ax1 in range(shape[1]):
             
-            if (ax1 == (shape[1]-1)) & (xend != 0):
-                width = xend
-            else:
-                width = xsize
+#             if (ax1 == (shape[1]-1)) & (xend != 0):
+#                 width = xend
+#             else:
+#                 width = xsize
             
             
-            windown = Window(x_off,y_off,width,height)
+#             windown = Window(x_off,y_off,width,height)
             
-            windows.append(windown)
+#             windows.append(windown)
             
-            x_off += width
+#             x_off += width
     
-    return windows
+#     return windows
     
     
     
