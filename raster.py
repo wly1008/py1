@@ -202,11 +202,6 @@ def read(raster_in,
 
     """
     
-    
-    
-    
-    
-    
     src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
     arr = src.read().astype(dtype)
     nodata = dtype(src.nodata)
@@ -267,7 +262,6 @@ def out(out_path, data, profile, shape=None):
     with rasterio.open(out_path,'w',**profile) as src:
         src.write(data)
     
-
 
 def out_ds(ds,out_path):
     """
@@ -355,7 +349,7 @@ def clip(raster_in, dst_in=None, bounds=None, out_path=None, get_ds=True):
     union_shape = (src.count, int((union[3] - union[1]) / ysize)+1, int((union[2] - union[0]) / xsize)+1)
     a = int((bounds_src[0] - union[0]) / xsize)
     d = int((union[3] - bounds_src[3]) / ysize)
-    union_arr = np.full(union_shape, src.nodata, profile['dtype'])
+    union_arr = np.full(union_shape, src.nodata, object)
     union_arr[:, d:d + src.height, a:a + src.width] = arr
 
     # clip
@@ -605,7 +599,7 @@ def reproject(raster_in, dst_in=None,
         return arr, profile
 
 
-def unify(raster_in, dst_in, out_path=None, get_ds=True):
+def unify(raster_in, dst_in, out_path=None, get_ds=True,**kwargs):
     '''
     统一栅格数据(空间参考、范围、行列数)
 
@@ -619,6 +613,11 @@ def unify(raster_in, dst_in, out_path=None, get_ds=True):
         输出地址. The default is None.
     get_ds : io.DatasetWriter, optional
         返回统一后的栅格数据(io.DatasetWriter). The default is True.
+    
+    
+    
+    **kwargs: 
+        接收调用函数(reproject、clip、resampling)的其他参数
 
     Returns
     -------
@@ -630,17 +629,32 @@ def unify(raster_in, dst_in, out_path=None, get_ds=True):
     
     
     shape = get_RasterArrt(dst_in, 'shape')
-
-    ds_pro = reproject(raster_in=raster_in, dst_in=dst_in)
-    ds_clip = clip(raster_in=ds_pro, dst_in=dst_in)
-
-    return resampling(raster_in=ds_clip, out_path=out_path, get_ds=get_ds, re_shape=shape)
+    
+    
+    
+    kwargs_reproject = {k:v for k,v in kwargs.items() if k in inspect.getargspec(reproject)[0]}
+    kwargs_clip = {k:v for k,v in kwargs.items() if k in inspect.getargspec(clip)[0]}
+    kwargs_resapilg = {k:v for k,v in kwargs.items() if k in inspect.getargspec(resampling)[0]}
+    
+    
+    
+    kwargs_reproject.update(raster_in=raster_in, dst_in=dst_in)
+    ds_pro = reproject(**kwargs_reproject)
+    
+    
+    
+    kwargs_clip.update(raster_in=ds_pro, dst_in=dst_in)
+    ds_clip = clip(**kwargs_clip)
+    
+    
+    kwargs_resapilg.update(raster_in=ds_clip, out_path=out_path, get_ds=get_ds, re_shape=shape)
+    return resampling(**kwargs_resapilg)
 
 
 
 if __name__ == '__main__':
 
-    path_in = r'F:/PyCharm/pythonProject1/arcmap/010栅格数据统一/蒸散/2001.tif'
+    path_in = r'F:/PyCharm/pythonProject1/arcmap/010栅格数据统一/蒸散(处理数据)/2001.tif'
 
 
     dst_in = r'F:/PyCharm/pythonProject1/arcmap/010栅格数据统一/降水(目标数据)/2001.tif'
