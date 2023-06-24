@@ -5,7 +5,7 @@ Created on Sat 2023/6/19 19:42
 """
 
 from rasterio.windows import Window
-import mycode.map
+
 import rasterio.mask
 import mycode.code as cd
 import re
@@ -28,7 +28,8 @@ def get_RasterArrt(raster_in, *args, ds={}, **kwargs):
     """
     获得栅格数据属性
 
-    raster_in: 栅格地址或栅格数据
+    raster_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py))
+        栅格数据或栅格地址
     args: 所需属性或函数（类中存在的，输入属性名、函数名即可）
     ds: （dict）传递操作所需变量,可将全局变量（globals()先赋予一个变量，直接将globals()填入参数可能会报错）输入，默认变量为此文件及cd文件的全局变量
 
@@ -59,17 +60,15 @@ def get_RasterArrt(raster_in, *args, ds={}, **kwargs):
     dic = {'raster_size': r"(src.height, src.width)", 'cell_size': ('xsize', 'ysize'),
            'bends': 'count', 'xsize': r'transform[0]', 'ysize': r'abs(src.transform[4])',
            'values': r'src.read().astype(dtype)//ks//{"dtype":np.float64}',
-           'df': r'pd.DataFrame(src.values.reshape(-1, 1))'}
+           'arr':r'src.values.reshape(-1, 1)',
+           'df': r'pd.DataFrame(src.values.reshape(-1, 1))',
+           'shape_b':('count', 'height', 'width')}
     _getattrs = partial(cd.getattrs, **dic)
 
-    if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)):
-        src = raster_in
-        return _getattrs(src, *args, ds=ds, **kwargs)
+    src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
 
-    else:
-        path_in = raster_in
-        with rasterio.open(path_in) as src:
-            return _getattrs(src, *args, ds=ds, **kwargs)
+
+    return _getattrs(src, *args, ds=ds, **kwargs)
 
 
 def add_attrs_raster(src, ds={}, **kwargs):
@@ -84,7 +83,9 @@ def add_attrs_raster(src, ds={}, **kwargs):
     dic = {'raster_size': r"(src.height, src.width)", 'cell_size': ('xsize', 'ysize'),
            'bends': 'count', 'xsize': r'transform[0]', 'ysize': r'abs(src.transform[4])',
            'values': r'src.read().astype(dtype)//ks//{"dtype":np.float64}',
-           'df': r'pd.DataFrame(src.values.reshape(-1, 1))'}
+           'arr':r'src.values.reshape(-1, 1)',
+           'df': r'pd.DataFrame(src.values.reshape(-1, 1))',
+           'shape_b':('count', 'height', 'width')}
 
     dic.update(kwargs)
 
@@ -95,106 +96,86 @@ def add_attrs_raster(src, ds={}, **kwargs):
     cd.add_attrs(src, run=True, ds=ds, **dic)
 
 
-
-
-
-
-
-# def window(raster_in,shape):
+def window(raster_in,shape):
+    '''
     
-#     src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
+
+    Parameters
+    ----------
+    raster_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py))
+        栅格数据或栅格地址
+    shape : tuple
+          (height,width)
+        分割为 height*width个窗口
+
+    Returns
+    -------
+    windows : TYPE
+        窗口集
+    inxs : TYPE
+        对应窗口在栅格中的位置索引
+
+    '''
     
-#     xsize,xend = src.width//shape[1], src.width%shape[1]
-#     ysize,yend = src.height//shape[0], src.height%shape[0]
     
     
-#     y_off = 0
-#     windows = []
-#     for ax0 in range(shape[0]):
+    
+    src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
+    
+    
+
+    xsize,xend = src.width//shape[1], src.width%shape[1]
+    ysize,yend = src.height//shape[0], src.height%shape[0]
+
+    
+    y_off = 0
+    inxs = []
+    inx = {}
+    windows = []
+    for ax0 in range(shape[0]):
         
-#         x_off = 0
+        x_off = 0
         
-#         if (ax0 == (shape[0]-1)) & (yend != 0):
-#             height = yend
-#         else:
-#             height = ysize
+        if (ax0 == (shape[0]-1)):
+            height = ysize + yend
+        else:
+            height = ysize
         
         
-#         for ax1 in range(shape[1]):
+        for ax1 in range(shape[1]):
             
-#             if (ax1 == (shape[1]-1)) & (xend != 0):
-#                 width = xend
-#             else:
-#                 width = xsize
+            if (ax1 == (shape[1]-1)):
+                width = xsize + xend
+            else:
+                width = xsize
             
             
-#             windown = Window(x_off,y_off,width,height)
+            windown = Window(x_off,y_off,width,height)
             
-#             windows.append(windown)
+            windows.append(windown)
             
-#             x_off += width
+            
+            #------------------------------
+            start = x_off
+            end = x_off + width
+            inx['x']=(start,end)
+            
+            start = y_off
+            end = y_off + height
+            inx['y'] =(start,end)
+            
+            inxs.append(inx.copy())
+            #------------------------------
+            
+            x_off += width
+             
+        y_off += height
     
-#     return windows
+    return windows,inxs
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 def read(raster_in,
-         n=1, tran=True,
+         n=1, tran=True,get_df = True,
          nan=np.nan, dtype=np.float64):
     """
     
@@ -207,6 +188,8 @@ def read(raster_in,
         返回几个值. The default is 1.
     tran : bool, optional.
         是否变为单列. The default is True.
+    get_df : bool, optional.
+        是否变为DataFrame
     nan : optional
         无效值设置.The default is np.nan.
     dtype : 数据类型（class），optional
@@ -226,22 +209,28 @@ def read(raster_in,
     
     src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
     arr = src.read().astype(dtype)
-    # nodata = dtype(src.nodata)
+    nodata = dtype(src.nodata)
     shape = arr.shape
     profile = src.profile
-    # profile.update(nodata=nodata)
+    profile.update(nodata=nodata)
     
     profile.update({'dtype': dtype,
                     'nodate': nan})
     df = pd.DataFrame(arr.reshape(-1, 1))
-    # df.replace(nodata, nan, inplace=True)
+    df.replace(nodata, nan, inplace=True)
     if tran:
-        data = df
-    else:
-        if shape[0] != 1:
-            data = np.array(df).reshape(shape)
+        if get_df:
+            data = df
         else:
+            data = np.array(df)
+   
+    else:
+        if (shape[0] == 1) & (get_df):
             data = pd.DataFrame(np.array(df).reshape(shape)[0])
+            
+        else:
+            data = np.array(df).reshape(shape)
+            
 
     # 返回
     if n == 1:
@@ -254,20 +243,31 @@ def read(raster_in,
         print('n=1 or 2 or 3')
 
 
-def out(out_path, data, profile, shape):
-    """
-        操作函数
-        ---------
-        （与read对应）
 
-        生成栅格文件
+def out(out_path, data, profile, shape=None):
+    """
+    
+    输出函数，
+    可配合形变矩阵（设置shape原形状参数）
+    
+
 
     """
-    data = np.array(data).reshape(shape)
-    bend = shape[0]
-    with rasterio.open(out_path, 'w', **profile) as src:
-        for i in range(bend):
-            src.write(data[i], i + 1)
+    
+    if not(shape is None):
+        if len(shape)==2:
+            shape = [1] + [i for i in shape]
+        data = np.array(data).reshape(shape)
+    
+    elif len(data.shape) == 2:
+        shape = [1] + [i for i in data.shape]
+        data = np.array(data).reshape(shape)
+    
+        
+    with rasterio.open(out_path,'w',**profile) as src:
+        src.write(data)
+    
+
 
 def out_ds(ds,out_path):
     """
@@ -308,7 +308,7 @@ def clip(raster_in, dst_in=None, bounds=None, out_path=None, get_ds=True):
         目标范围(左，下，右，上)
     out_path : str, optional
         输出地址. The default is None.
-    get_ds : TYPE, optional
+    get_ds : bool, optional
         返回裁剪后的栅格数据(io.DatasetWriter). The default is True.
 
     Raises
@@ -349,6 +349,9 @@ def clip(raster_in, dst_in=None, bounds=None, out_path=None, get_ds=True):
              max(bounds[3], bounds_src[3]),)  # north
 
     arr = src.read()
+    
+    
+    
     union_shape = (src.count, int((union[3] - union[1]) / ysize)+1, int((union[2] - union[0]) / xsize)+1)
     a = int((bounds_src[0] - union[0]) / xsize)
     d = int((union[3] - bounds_src[3]) / ysize)
@@ -357,7 +360,7 @@ def clip(raster_in, dst_in=None, bounds=None, out_path=None, get_ds=True):
 
     # clip
     a = int((bounds[0] - union[0]) / xsize)
-    b = int((union[3] - bounds_src[1]) / ysize)
+    b = int((union[3] - bounds[1]) / ysize)
     c = int((bounds[2] - union[0]) / xsize)
     d = int((union[3] - bounds[3]) / ysize)
 
@@ -647,11 +650,11 @@ if __name__ == '__main__':
 
 
 
-    x = unify(dst_in, path_in,  out_path=None, get_ds=True)
+    ds = unify(path_in, dst_in,  out_path=None, get_ds=True)
 
 
-    out_ds(x, out_path)
-    z = x.crs
+    out_ds(ds, out_path)
+
 
 
 
