@@ -5,7 +5,7 @@ Created on Sat 2023/6/19 19:42
 """
 
 from rasterio.windows import Window
-
+import warnings
 import rasterio.mask
 import mycode.code as cd
 import re
@@ -17,6 +17,7 @@ from rasterio.warp import calculate_default_transform
 from rasterio.enums import Resampling
 import os, sys
 import inspect
+from rasterio.warp import reproject as reproject_
 
 
 def create_raster(**kwargs):
@@ -60,13 +61,12 @@ def get_RasterArrt(raster_in, *args, ds={}, **kwargs):
     dic = {'raster_size': r"(src.height, src.width)", 'cell_size': ('xsize', 'ysize'),
            'bends': 'count', 'xsize': r'transform[0]', 'ysize': r'abs(src.transform[4])',
            'values': r'src.read().astype(dtype)//ks//{"dtype":np.float64}',
-           'arr':r'src.values.reshape(-1, 1)',
+           'arr': r'src.values.reshape(-1, 1)',
            'df': r'pd.DataFrame(src.values.reshape(-1, 1))',
-           'shape_b':('count', 'height', 'width')}
+           'shape_b': ('count', 'height', 'width')}
     _getattrs = partial(cd.getattrs, **dic)
 
     src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
-
 
     return _getattrs(src, *args, ds=ds, **kwargs)
 
@@ -83,9 +83,9 @@ def add_attrs_raster(src, ds={}, **kwargs):
     dic = {'raster_size': r"(src.height, src.width)", 'cell_size': ('xsize', 'ysize'),
            'bends': 'count', 'xsize': r'transform[0]', 'ysize': r'abs(src.transform[4])',
            'values': r'src.read().astype(dtype)//ks//{"dtype":np.float64}',
-           'arr':r'src.values.reshape(-1, 1)',
+           'arr': r'src.values.reshape(-1, 1)',
            'df': r'pd.DataFrame(src.values.reshape(-1, 1))',
-           'shape_b':('count', 'height', 'width')}
+           'shape_b': ('count', 'height', 'width')}
 
     dic.update(kwargs)
 
@@ -96,7 +96,7 @@ def add_attrs_raster(src, ds={}, **kwargs):
     cd.add_attrs(src, run=True, ds=ds, **dic)
 
 
-def window(raster_in,shape):
+def window(raster_in, shape):
     '''
     
 
@@ -116,66 +116,57 @@ def window(raster_in,shape):
         对应窗口在栅格中的位置索引
 
     '''
-    
-    
-    
-    
+
     src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
-    
-    
 
-    xsize,xend = src.width//shape[1], src.width%shape[1]
-    ysize,yend = src.height//shape[0], src.height%shape[0]
+    xsize, xend = src.width // shape[1], src.width % shape[1]
+    ysize, yend = src.height // shape[0], src.height % shape[0]
 
-    
     y_off = 0
     inxs = []
     inx = {}
     windows = []
     for ax0 in range(shape[0]):
-        
+
         x_off = 0
-        
-        if (ax0 == (shape[0]-1)):
+
+        if (ax0 == (shape[0] - 1)):
             height = ysize + yend
         else:
             height = ysize
-        
-        
+
         for ax1 in range(shape[1]):
-            
-            if (ax1 == (shape[1]-1)):
+
+            if (ax1 == (shape[1] - 1)):
                 width = xsize + xend
             else:
                 width = xsize
-            
-            
-            windown = Window(x_off,y_off,width,height)
-            
+
+            windown = Window(x_off, y_off, width, height)
+
             windows.append(windown)
-            
-            
-            #------------------------------
+
+            # ------------------------------
             start = x_off
             end = x_off + width
-            inx['x']=(start,end)
-            
+            inx['x'] = (start, end)
+
             start = y_off
             end = y_off + height
-            inx['y'] =(start,end)
-            
+            inx['y'] = (start, end)
+
             inxs.append(inx.copy())
-            #------------------------------
-            
+            # ------------------------------
+
             x_off += width
-             
+
         y_off += height
-    
-    return windows,inxs
-    
+
+    return windows, inxs
+
 
 def read(raster_in,
-         n=1, tran=True,get_df = True,
+         n=1, tran=True, get_df=True,
          nan=np.nan, dtype=np.float64):
     """
     
@@ -201,14 +192,14 @@ def read(raster_in,
         栅格矩阵（单列or原型）；profile;shape
 
     """
-    
+
     src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
     arr = src.read().astype(dtype)
     nodata = dtype(src.nodata)
     shape = arr.shape
     profile = src.profile
     profile.update(nodata=nodata)
-    
+
     profile.update({'dtype': dtype,
                     'nodate': nan})
     df = pd.DataFrame(arr.reshape(-1, 1))
@@ -218,14 +209,13 @@ def read(raster_in,
             data = df
         else:
             data = np.array(df)
-   
+
     else:
         if (shape[0] == 1) & (get_df):
             data = pd.DataFrame(np.array(df).reshape(shape)[0])
-            
+
         else:
             data = np.array(df).reshape(shape)
-            
 
     # 返回
     if n == 1:
@@ -238,7 +228,6 @@ def read(raster_in,
         print('n=1 or 2 or 3')
 
 
-
 def out(out_path, data, profile, shape=None):
     """
     
@@ -248,22 +237,21 @@ def out(out_path, data, profile, shape=None):
 
 
     """
-    
-    if not(shape is None):
-        if len(shape)==2:
+
+    if not (shape is None):
+        if len(shape) == 2:
             shape = [1] + [i for i in shape]
         data = np.array(data).reshape(shape)
-    
+
     elif len(data.shape) == 2:
         shape = [1] + [i for i in data.shape]
         data = np.array(data).reshape(shape)
-    
-        
-    with rasterio.open(out_path,'w',**profile) as src:
-        src.write(data)
-    
 
-def out_ds(ds,out_path):
+    with rasterio.open(out_path, 'w', **profile) as src:
+        src.write(data)
+
+
+def out_ds(ds, out_path):
     """
     输出栅格数据
 
@@ -279,198 +267,11 @@ def out_ds(ds,out_path):
     无
 
     """
-    
+
     arr = ds.read()
     profile = ds.profile
-    with rasterio.open(out_path,'w',**profile) as src:
+    with rasterio.open(out_path, 'w', **profile) as src:
         src.write(arr)
-    
-
-
-def extract(raster_in, dst_in,
-            out_path=None, get_ds=True):
-    '''
-    
-    栅格按栅格掩膜提取
-    
-
-    Parameters
-    ----------
-    raster_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py))
-        输入栅格数据或栅格地址
-    dst_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py)), optional
-        掩膜的栅格数据或栅格地址
-    out_path : str, optional
-        输出地址. The default is None.
-    get_ds : bool, optional
-        返回提取后的栅格数据(io.DatasetWriter). The default is True.
-    
-    
-    Raises
-    ------
-    Exception
-        二者的'crs'、 'raster_size'、 'transform'需统一,可先调用unify函数统一栅格数据
-        
-    
-    
-    Returns
-    -------
-    if out_path:生成栅格文件，不返回
-    elif get_ds:返回提取后的栅格数据(io.DatasetWriter)
-    else:返回提取后的栅格矩阵（array）和 profile
-
-
-    '''
-    
-    src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
-    dst = dst_in if type(dst_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(dst_in)
-    
-
-    
-    arrtnames = ('crs', 'raster_size', 'transform')
-
-    src_arrts = get_RasterArrt(src, *arrtnames)
-    dst_arrts = get_RasterArrt(dst, *arrtnames)
-    
-    
-    if src_arrts != dst_arrts:
-        print('无法正确提取:')
-        [print(f'    {arrtnames[i]}不一致') for i in range(len(arrtnames)) if src_arrts[i] != dst_arrts[i]]
-        raise Exception('请统一以上属性')
-    
-    
-    mask = dst.dataset_mask()
-    
-    if len(mask) == 3:
-        mask = mask[1]
-    
-    mask = np.array([mask for i in src.count])
-    
-    arr = src.read()[mask]
-    profile = src.profile
-    
-    if out_path:
-        with rasterio.open(out_path, 'w', **profile) as ds:
-            ds.write(arr)
-    elif get_ds:
-        ds = create_raster(**profile)
-        ds.write(arr)
-        return ds
-    else:
-        return arr, profile
-    
-
-
-def clip(raster_in,
-         dst_in=None, bounds=None,
-         Extract = False,
-         out_path=None, get_ds=True):
-    """
-    栅格按范围裁剪
-    (可按栅格掩膜提取)
-    
-    
-
-    Parameters
-    ----------
-    raster_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py))
-        输入栅格数据或栅格地址
-    dst_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py)), optional
-        目标范围的栅格数据或栅格地址
-    bounds : tuple, optional
-        目标范围(左，下，右，上)
-    
-    Extract : bool.optional
-        调用extract函数
-        是否对目标dst_in有效值位置的数据进行提取
-        (类似矢量按周长边界裁剪栅格，dst_in必填且为栅格). The default is False.
-    
-    out_path : str, optional
-        输出地址. The default is None.
-    get_ds : bool, optional
-        返回裁剪后的栅格数据(io.DatasetWriter). The default is True.
-
-    Raises
-    ------
-       1. dst_in 和 bounds必须输入其中一个
-       2. 使用extract，dst_in必填且为栅格
-        
-
-    Returns
-    -------
-    if out_path:生成栅格文件，不返回
-    elif get_ds:返回栅格数据(io.DatasetWriter)
-    else:返回裁剪后的栅格矩阵（array）和 profile
-
-    """
-    
-    
-    
-    src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
-
-    if dst_in:
-        bounds = get_RasterArrt(dst_in, 'bounds')
-    elif bounds:
-        pass
-    else:
-        raise Exception("dst_in 和 bounds必须输入其中一个")
-
-    xsize, ysize, bounds_src, profile = get_RasterArrt(src, 'xsize', 'ysize', 'bounds', 'profile')
-
-    # 填充范围
-    union = (min(bounds[0], bounds_src[0]),  # west
-             min(bounds[1], bounds_src[1]),  # south
-             max(bounds[2], bounds_src[2]),  # east
-             max(bounds[3], bounds_src[3]))  # north
-
-    arr = src.read()
-    
-    
-    
-    union_shape = (src.count, int((union[3] - union[1]) / ysize)+1, int((union[2] - union[0]) / xsize)+1)
-    a = int((bounds_src[0] - union[0]) / xsize)
-    d = int((union[3] - bounds_src[3]) / ysize)
-    union_arr = np.full(union_shape, src.nodata, object)
-    union_arr[:, d:d + src.height, a:a + src.width] = arr
-
-    # clip
-    a = int((bounds[0] - union[0]) / xsize)
-    b = int((union[3] - bounds[1]) / ysize)
-    c = int((bounds[2] - union[0]) / xsize)
-    d = int((union[3] - bounds[3]) / ysize)
-
-    dst_height = b - d
-    dst_width = c - a
-    dst_arr = union_arr[:, d:b, a:c]
-
-    dst_transform = rasterio.transform.from_bounds(*bounds, dst_width, dst_height)
-
-    profile.update({'height': dst_height,
-                    'width': dst_width,
-                    'transform': dst_transform})
-    
-    
-    if Extract:
-        if dst_in is None:
-            raise Exception('使用extract，dst_in必填且为栅格')
-        
-        
-        
-        ds = create_raster(**profile)
-        ds.write(dst_arr)
-        
-        return extract(ds, dst_in, out_path=out_path, get_ds=get_ds)
-    
-
-    if out_path:
-        with rasterio.open(out_path, 'w', **profile) as ds:
-            ds.write(dst_arr)
-    elif get_ds:
-        ds = create_raster(**profile)
-        ds.write(dst_arr)
-        return ds
-    else:
-        return dst_arr, profile
 
 
 def resampling(raster_in, out_path=None, get_ds=True,
@@ -527,9 +328,7 @@ def resampling(raster_in, out_path=None, get_ds=True,
     else:返回重采样后的栅格矩阵（array）和 profile
 
     """
-    
 
-    
     def update():  # <<<<<<<<<更新函数
 
         if shape != out_shape:
@@ -608,7 +407,7 @@ def resampling(raster_in, out_path=None, get_ds=True,
 def reproject(raster_in, dst_in=None,
               out_path=None, get_ds=True,
               crs=None,
-              how='nearest', 
+              how='nearest',
               resolution=None, shape=(None, None, None)):
     """
     栅格重投影
@@ -639,11 +438,13 @@ def reproject(raster_in, dst_in=None,
     cubic_spline:三次卷积，3。
     ...其余见rasterio.enums.Resampling
     
-    
+    ------------------------------------------------------
     resolution : TYPE, optional
-        输出栅格分辨率. The default is None.
+        输出栅格分辨率单位为目标坐标单位. The default is None.
     shape : TYPE, optional
         输出栅格形状. The default is (None, None, None).
+        
+        <<<<<<  resolution与shape不能一起使用
         
         
    
@@ -653,17 +454,17 @@ def reproject(raster_in, dst_in=None,
     
     Returns
     -------
-    TYPE
-        DESCRIPTION.
+    if out_path:生成栅格文件，不返回
+    elif get_ds:返回栅格数据(io.DatasetWriter)
+    else:返回重投影后的栅格矩阵（array）和 profile
 
     """
-     
-    
+
     src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
     if crs:
         pass
     elif dst_in:
-        crs = get_RasterArrt(dst_in,'crs')
+        crs = get_RasterArrt(dst_in, 'crs')
     else:
         raise Exception("dst_in 和 bounds必须输入其中一个")
 
@@ -675,13 +476,107 @@ def reproject(raster_in, dst_in=None,
                                                                        resolution=resolution, dst_width=shape[2],
                                                                        dst_height=shape[1])
 
-    out_shape = (src.count, dst_height, dst_width)
-
     profile.update({'crs': crs, 'transform': dst_transform, 'width': dst_width, 'height': dst_height})
 
     how = how if type(how) is int else getattr(Resampling, how)
 
-    arr = src.read(out_shape=out_shape, resampling=how)
+    # arr = src.read(out_shape=out_shape, resampling=how)
+    lst = []
+    for i in range(1, src.count + 1):
+        arrn = src.read(i)
+        dst_array = np.empty((dst_height, dst_width), dtype=profile['dtype'])
+        reproject_(  # 源文件参数
+            source=arrn,
+            src_crs=src.crs,
+            src_transform=src.transform,
+            # 目标文件参数
+            destination=dst_array,
+            dst_transform=dst_transform,
+            dst_crs=crs,
+            # 其它配置
+            resampling=how,
+            num_threads=2)
+
+        lst.append(dst_array)
+    dst_arr = np.array(lst)
+
+    if out_path:
+        with rasterio.open(out_path, 'w', **profile) as ds:
+            ds.write(dst_arr)
+    elif get_ds:
+        ds = create_raster(**profile)
+        ds.write(dst_arr)
+        return ds
+    else:
+        return dst_arr, profile
+
+
+def extract(raster_in, dst_in,
+            out_path=None, get_ds=True):
+    """
+
+    栅格按栅格掩膜提取
+
+
+    Parameters
+    ----------
+    raster_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py))
+        输入栅格数据或栅格地址
+    dst_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py)), optional
+        掩膜的栅格数据或栅格地址
+    out_path : str, optional
+        输出地址. The default is None.
+    get_ds : bool, optional
+        返回提取后的栅格数据(io.DatasetWriter). The default is True.
+
+
+    Raises
+    ------
+    Exception
+        二者的'crs'、 'raster_size'、 'transform'需统一,可先调用unify函数统一栅格数据
+
+
+
+    Returns
+    -------
+    if out_path:生成栅格文件，不返回
+    elif get_ds:返回提取后的栅格数据(io.DatasetWriter)
+    else:返回提取后的栅格矩阵（array）和 profile
+
+
+    """
+
+    src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
+    dst = dst_in if type(dst_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(dst_in)
+
+    arrtnames = ('crs', 'raster_size', 'transform')
+
+    src_arrts = get_RasterArrt(src, arrtnames)
+    dst_arrts = get_RasterArrt(dst, arrtnames)
+
+    print(src_arrts[0] == dst_arrts[0])
+    if src_arrts != dst_arrts:
+        print('无法正确提取:')
+        [print(f'    {arrtnames[i]}不一致') for i in range(len(arrtnames)) if src_arrts[i] != dst_arrts[i]]
+        raise Exception('extract: 请统一以上属性')
+
+    # 获得有效值掩膜
+    mask = dst.dataset_mask()
+
+    if len(mask) == 3:
+        mask = mask.max(axis=0)
+
+    mask = np.array([mask for i in range(src.count)])
+
+    # 按掩膜提取
+    arr = src.read()
+    shape = arr.shape
+    df_mask = pd.DataFrame(mask.reshape(-1, 1))
+    df_src = pd.DataFrame(arr.reshape(-1, 1))
+    df = df_src[df_mask != 0]
+    arr = np.array(df).reshape(shape)
+
+    profile = src.profile
 
     if out_path:
         with rasterio.open(out_path, 'w', **profile) as ds:
@@ -694,8 +589,141 @@ def reproject(raster_in, dst_in=None,
         return arr, profile
 
 
-def unify(raster_in, dst_in, out_path=None, get_ds=True,**kwargs):
-    '''
+def clip(raster_in,
+         dst_in=None, bounds=None,
+         Extract=False,
+         out_path=None, get_ds=True):
+    """
+    栅格按范围裁剪
+    (可按栅格有效值位置掩膜提取)
+    
+    
+
+    Parameters
+    ----------
+    raster_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py))
+        输入栅格数据或栅格地址
+    dst_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py)), optional
+        目标范围的栅格数据或栅格地址
+    bounds : tuple, optional
+        目标范围(左，下，右，上)
+    
+    Extract : bool.optional
+        调用extract函数
+        是否对目标dst_in有效值位置的数据进行提取
+        (类似矢量按周长边界裁剪栅格，dst_in必填且为栅格). The default is False.
+    
+    out_path : str, optional
+        输出地址. The default is None.
+    get_ds : bool, optional
+        返回裁剪后的栅格数据(io.DatasetWriter). The default is True.
+
+    Raises
+    ------
+       1. dst_in 和 bounds必须输入其中一个
+       2. 如使用dst_in, dst_in 和 raster_in空间参考(crs)须一致.
+       2. 使用extract，dst_in必填且为栅格
+        
+
+    Returns
+    -------
+    if out_path:生成栅格文件，不返回
+    elif get_ds:返回栅格数据(io.DatasetWriter)
+    else:返回裁剪后的栅格矩阵（array）和 profile
+
+    """
+
+    src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
+
+    if dst_in:
+
+        bounds, crs = get_RasterArrt(dst_in, 'bounds', 'crs')
+
+        if crs != src.crs:
+            raise Exception('clip: crs不一致')
+
+    elif bounds:
+        pass
+    else:
+        raise Exception("clip: dst_in 和 bounds必须输入其中一个")
+
+    xsize, ysize, bounds_src, profile = get_RasterArrt(src, 'xsize', 'ysize', 'bounds', 'profile')
+
+    # 判断是否有交集
+    inter = (max(bounds[0], bounds_src[0]),  # west
+             max(bounds[1], bounds_src[1]),  # south
+             min(bounds[2], bounds_src[2]),  # east
+             min(bounds[3], bounds_src[3]))  # north
+
+    if (inter[2] < inter[0]) | (inter[3] < inter[1]):
+        # print('输入范围与栅格不重叠')
+        warnings.warn('clip: 输入范围与栅格不重叠')
+
+    # 填充范围
+
+    # 并集
+    union = (min(bounds[0], bounds_src[0]),  # west
+             min(bounds[1], bounds_src[1]),  # south
+             max(bounds[2], bounds_src[2]),  # east
+             max(bounds[3], bounds_src[3]))  # north
+
+    union_shape = (src.count, int((union[3] - union[1]) / ysize) + 1, int((union[2] - union[0]) / xsize) + 1)
+    union_arr = np.full(union_shape, src.nodata, object)
+
+    # 填入源数据栅格值
+    arr = src.read()
+
+    a = int((bounds_src[0] - union[0]) / xsize)
+    d = int((union[3] - bounds_src[3]) / ysize)
+    union_arr[:, d:d + src.height, a:a + src.width] = arr
+
+    # clip,提取输入范围内的值
+    a = int((bounds[0] - union[0]) / xsize)
+    b = int((union[3] - bounds[1]) / ysize)
+    c = int((bounds[2] - union[0]) / xsize)
+    d = int((union[3] - bounds[3]) / ysize)
+
+    dst_height = b - d
+    dst_width = c - a
+    dst_arr = union_arr[:, d:b, a:c]
+
+    dst_transform = rasterio.transform.from_bounds(*bounds, dst_width, dst_height)
+
+    profile.update({'height': dst_height,
+                    'width': dst_width,
+                    'transform': dst_transform})
+
+    if Extract:
+        if dst_in is None:
+            raise Exception('使用extract，dst_in必填且为栅格')
+
+        # 如果栅格
+        src_shape = (dst_height, dst_width)
+        dst_shape = get_RasterArrt(dst_in, 'raster_size')
+
+        if src_shape != dst_shape:
+            dst = resampling(raster_in=dst_in, re_shape=src_shape, how='nearest')
+        else:
+            dst = dst_in
+
+        ds = create_raster(**profile)
+        ds.write(dst_arr)
+
+        return extract(raster_in=ds, dst_in=dst, out_path=out_path, get_ds=get_ds)
+
+    if out_path:
+        with rasterio.open(out_path, 'w', **profile) as ds:
+            ds.write(dst_arr)
+    elif get_ds:
+        ds = create_raster(**profile)
+        ds.write(dst_arr)
+        return ds
+    else:
+        return dst_arr, profile
+
+
+def unify(raster_in, dst_in, out_path=None, get_ds=True, **kwargs):
+    """
     统一栅格数据(空间参考、范围、行列数)
 
     Parameters
@@ -708,10 +736,10 @@ def unify(raster_in, dst_in, out_path=None, get_ds=True,**kwargs):
         输出地址. The default is None.
     get_ds : io.DatasetWriter, optional
         返回统一后的栅格数据(io.DatasetWriter). The default is True.
-    
-    
-    
-    **kwargs: 
+
+
+
+    **kwargs:
         接收调用函数(reproject、clip、resampling)的其他参数
 
     Returns
@@ -720,87 +748,94 @@ def unify(raster_in, dst_in, out_path=None, get_ds=True,**kwargs):
     elif get_ds:返回栅格数据(io.DatasetWriter)
     else:返回重采样后的栅格矩阵（array）和 profile
 
-    '''
-    
-    
+    """
+
     shape = get_RasterArrt(dst_in, 'shape')
-    
-    
-    
-    kwargs_reproject = {k:v for k,v in kwargs.items() if k in inspect.getargspec(reproject)[0]}
-    kwargs_clip = {k:v for k,v in kwargs.items() if k in inspect.getargspec(clip)[0]}
-    kwargs_resapilg = {k:v for k,v in kwargs.items() if k in inspect.getargspec(resampling)[0]}
-    
-    
-    
+
+    kwargs_reproject = {k: v for k, v in kwargs.items() if k in inspect.getargspec(reproject)[0]}
+    kwargs_clip = {k: v for k, v in kwargs.items() if k in inspect.getargspec(clip)[0]}
+    kwargs_resapilg = {k: v for k, v in kwargs.items() if k in inspect.getargspec(resampling)[0]}
+
     kwargs_reproject.update(raster_in=raster_in, dst_in=dst_in)
     ds_pro = reproject(**kwargs_reproject)
-    
-    
-    
+
     kwargs_clip.update(raster_in=ds_pro, dst_in=dst_in)
     ds_clip = clip(**kwargs_clip)
-    
-    
+
     kwargs_resapilg.update(raster_in=ds_clip, out_path=out_path, get_ds=get_ds, re_shape=shape)
     return resampling(**kwargs_resapilg)
 
 
-
 def extract_unify(raster_in, dst_in,
-                  out_path=None, get_ds=True,**kwargs):
-    '''
+                  out_path=None, get_ds=True, **kwargs):
+    """
     栅格按栅格掩膜提取
     (含统一操作)
     --------------------------
-    
+
     参数详见unify、extract函数
-    
-    
+
+
     Returns
     ------------------
     if out_path:生成栅格文件，不返回
     elif get_ds:返回提取后栅格数据(io.DatasetWriter)
     else:返回提取后的栅格矩阵（array）和 profile
-    
-
-    
-    '''
-    
-    
-    
-    ds = unify(raster_in=raster_in, dst_in=dst_in, out_path=None, get_ds=True, **kwargs)
-    
-    return extract(raster_in=ds, dst_in=dst_in, out_path=out_path, get_ds=get_ds)
 
 
 
+    """
 
+    # 先将掩膜数据属性转换致与输入数据相同
+    ds = unify(raster_in=dst_in, dst_in=raster_in, out_path=None, get_ds=True, **kwargs)
 
-
-
+    return extract(raster_in=raster_in, dst_in=ds, out_path=out_path, get_ds=get_ds)
 
 
 if __name__ == '__main__':
-
     raster_in = r'F:/PyCharm/pythonProject1/arcmap/010栅格数据统一/蒸散(处理数据)/2001.tif'
-
 
     dst_in = r'F:/PyCharm/pythonProject1/arcmap/010栅格数据统一/降水(目标数据)/2001.tif'
 
-
     out_path = r'F:\PyCharm\pythonProject1\arcmap\010栅格数据统一\new\测试_clip2.tif'
 
-
-
     # ds = unify(raster_in, dst_in,  out_path=None, get_ds=True)
-
+    
 
     # out_ds(ds, out_path)
+    profile = get_RasterArrt(raster_in, 'profile')
+    
+    profile.closed
+    
+    ds = rasterio.open(raster_in)
     
     
+    
+    
+    
+    
+    src = rasterio.open(raster_in)
+    dst = create_raster(**profile)
+    x = clip(raster_in, bounds=(1, 3, 2, 4))
+
     x = extract(raster_in, dst_in,
-             out_path=None, get_ds=True)
+                out_path=None, get_ds=True)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
