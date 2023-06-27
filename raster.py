@@ -32,7 +32,9 @@ def get_RasterArrt(raster_in, *args, ds={}, **kwargs):
     raster_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py))
         栅格数据或栅格地址
     args: 所需属性或函数（类中存在的，输入属性名、函数名即可）
-    ds: （dict）传递操作所需变量,可将全局变量（globals()先赋予一个变量，直接将globals()填入参数可能会报错）输入，默认变量为此文件及cd文件的全局变量
+    ds: (dict)
+        传递操作所需变量,可将全局变量(globals()先赋予一个变量，直接将globals()填入参数可能会报错)输入，
+        默认额外可用变量为函数此文件及mycode.code文件的全局变量
 
 
     kwargs: 字典值获得对应属性所需操作，可为表达式，默认参数以字典形式写在“//ks//”之后，在ds中输入相应变量可替代默认参数
@@ -477,7 +479,6 @@ def reproject(raster_in, dst_in=None,
 
     how = how if type(how) is int else getattr(Resampling, how)
 
-    # arr = src.read(out_shape=out_shape, resampling=how)
     lst = []
     for i in range(1, src.count + 1):
         arrn = src.read(i)
@@ -791,6 +792,11 @@ def extract_unify(raster_in, dst_in,
 if __name__ == '__main__':
     
     
+ 
+    
+    
+    
+    
     raster_in = r'F:/PyCharm/pythonProject1/arcmap/010栅格数据统一/蒸散(处理数据)/2001.tif'
 
     dst_in = r'F:/PyCharm/pythonProject1/arcmap/010栅格数据统一/降水(目标数据)/2001.tif'
@@ -803,6 +809,41 @@ if __name__ == '__main__':
     out_ds(ds, out_path)
     
     
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
