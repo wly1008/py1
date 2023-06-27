@@ -336,10 +336,7 @@ def resampling(raster_in, out_path=None, get_ds=True,
             if not (printf is False):
                 print(f'{printf}的原形状为{shape}')
 
-            bounds = {'west': west, 'south': south, 'east': east,
-                      'north': north, 'height': out_shape[1], 'width': out_shape[2]}
-
-            transform = rasterio.transform.from_bounds(**bounds)
+            transform = rasterio.transform.from_bounds(*bounds, height=out_shape[1], width=out_shape[2])
 
             profile.data.update({'height': out_shape[1], 'width': out_shape[2], 'transform': transform})
 
@@ -353,9 +350,9 @@ def resampling(raster_in, out_path=None, get_ds=True,
     src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
 
     # 取出所需参数
-    nodata, profile, count, height, width, transform = get_RasterArrt(src, *(
-        'nodata', 'profile', 'count', 'height', 'width', 'transform'))
-    west, south, east, north = rasterio.transform.array_bounds(height, width, transform)
+    nodata, profile, count, height, width, bounds= get_RasterArrt(src, *(
+        'nodata', 'profile', 'count', 'height', 'width', 'bounds'))
+    west, south, east, north = bounds
     shape = (count, height, width)
 
     if re_shape:
@@ -655,7 +652,7 @@ def clip(raster_in,
              min(bounds[2], bounds_src[2]),  # east
              min(bounds[3], bounds_src[3]))  # north
 
-    if (inter[2] < inter[0]) | (inter[3] < inter[1]):
+    if (inter[2] <= inter[0]) | (inter[3] <= inter[1]):
         # print('输入范围与栅格不重叠')
         warnings.warn('clip: 输入范围与栅格不重叠')
 
@@ -751,19 +748,18 @@ def unify(raster_in, dst_in, out_path=None, get_ds=True, **kwargs):
     """
 
     shape = get_RasterArrt(dst_in, 'shape')
+    
+    # 接收其他参数
+    kwargs_reproject = {k: v for k, v in kwargs.items() if k in inspect.getfullargspec(reproject)[0]}
+    kwargs_clip = {k: v for k, v in kwargs.items() if k in inspect.getfullargspec(clip)[0]}
+    kwargs_resapilg = {k: v for k, v in kwargs.items() if k in inspect.getfullargspec(resampling)[0]}
 
-    kwargs_reproject = {k: v for k, v in kwargs.items() if k in inspect.getargspec(reproject)[0]}
-    kwargs_clip = {k: v for k, v in kwargs.items() if k in inspect.getargspec(clip)[0]}
-    kwargs_resapilg = {k: v for k, v in kwargs.items() if k in inspect.getargspec(resampling)[0]}
-
-    kwargs_reproject.update(raster_in=raster_in, dst_in=dst_in)
-    ds_pro = reproject(**kwargs_reproject)
-
-    kwargs_clip.update(raster_in=ds_pro, dst_in=dst_in)
-    ds_clip = clip(**kwargs_clip)
-
-    kwargs_resapilg.update(raster_in=ds_clip, out_path=out_path, get_ds=get_ds, re_shape=shape)
-    return resampling(**kwargs_resapilg)
+    # 重投影（空间参考）
+    ds_pro = reproject(raster_in=raster_in, dst_in=dst_in,**kwargs_reproject)
+    # 裁剪（范围）
+    ds_clip = clip(raster_in=ds_pro, dst_in=dst_in,**kwargs_clip)
+    # 重采样（行列数）
+    return resampling(raster_in=ds_clip, out_path=out_path, get_ds=get_ds, re_shape=shape,**kwargs_resapilg)
 
 
 def extract_unify(raster_in, dst_in,
@@ -793,37 +789,57 @@ def extract_unify(raster_in, dst_in,
 
 
 if __name__ == '__main__':
+    
+    
     raster_in = r'F:/PyCharm/pythonProject1/arcmap/010栅格数据统一/蒸散(处理数据)/2001.tif'
 
     dst_in = r'F:/PyCharm/pythonProject1/arcmap/010栅格数据统一/降水(目标数据)/2001.tif'
 
-    out_path = r'F:\PyCharm\pythonProject1\arcmap\010栅格数据统一\new\测试_clip2.tif'
-
-    # ds = unify(raster_in, dst_in,  out_path=None, get_ds=True)
-    
-
-    # out_ds(ds, out_path)
-    profile = get_RasterArrt(raster_in, 'profile')
-    
-    profile.closed
-    
-    ds = rasterio.open(raster_in)
+    out_path = r'F:\PyCharm\pythonProject1\arcmap\010栅格数据统一\new\测试.tif'
     
     
+    ds = resampling(raster_in,re_scale=3)
+    
+    out_ds(ds, out_path)
     
     
-    
-    
-    src = rasterio.open(raster_in)
-    dst = create_raster(**profile)
-    x = clip(raster_in, bounds=(1, 3, 2, 4))
-
-    x = extract(raster_in, dst_in,
-                out_path=None, get_ds=True)
 
 
 
 
+    # x = inspect.signature(read).parameters
+    
+    # x = inspect.getfullargspec(read)
+    
+    # print(x)
+    
+    # n = []
+    # k = []
+    # d = []
+    # # y = {k:p.}
+    # for name,p in x.items():
+        
+    #     pass
+    
+       
+       
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
 
 
 
