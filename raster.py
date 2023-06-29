@@ -8,16 +8,19 @@ from rasterio.windows import Window
 import warnings
 import rasterio.mask
 import mycode.code as cd
-import re
 from functools import partial
 import rasterio
 import pandas as pd
 import numpy as np
 from rasterio.warp import calculate_default_transform
 from rasterio.enums import Resampling
-import os, sys
+import os, sys, re
 import inspect
-from rasterio.warp import reproject as reproject_
+from rasterio.warp import reproject as _reproject
+
+
+
+
 
 
 def create_raster(**kwargs):
@@ -60,12 +63,13 @@ def get_RasterArrt(raster_in, *args, ds={}, **kwargs):
     # 此文件变量优先级高
     ds.update(globals())
 
-    dic = {'raster_size': r"(src.height, src.width)", 'cell_size': ('xsize', 'ysize'),
+    dic = {'raster_size': r"(src.height, src.width)", 'cell_size': r"(src.xsize, src.ysize)",
            'bends': 'count', 'xsize': r'transform[0]', 'ysize': r'abs(src.transform[4])',
            'values': r'src.read().astype(dtype)//ks//{"dtype":np.float64}',
            'arr': r'src.values.reshape(-1, 1)',
            'df': r'pd.DataFrame(src.values.reshape(-1, 1))',
-           'shape_b': ('count', 'height', 'width')}
+           'shape_b': r"(src.count, src.height, src.width)"}
+           #'shape_b': ('count', 'height', 'width')}
     _getattrs = partial(cd.getattrs, **dic)
 
     src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
@@ -82,12 +86,12 @@ def add_attrs_raster(src, ds={}, **kwargs):
     kwargs:属性：对应表达式（"//ks//后为默认参数，在ds中输入相应变量可替代默认参数"）
 
     """
-    dic = {'raster_size': r"(src.height, src.width)", 'cell_size': ('xsize', 'ysize'),
+    dic = {'raster_size': r"(src.height, src.width)", 'cell_size': r"(src.xsize, src.ysize)",
            'bends': 'count', 'xsize': r'transform[0]', 'ysize': r'abs(src.transform[4])',
            'values': r'src.read().astype(dtype)//ks//{"dtype":np.float64}',
            'arr': r'src.values.reshape(-1, 1)',
            'df': r'pd.DataFrame(src.values.reshape(-1, 1))',
-           'shape_b': ('count', 'height', 'width')}
+           'shape_b': r"(src.count, src.height, src.width)"}
 
     dic.update(kwargs)
 
@@ -123,14 +127,18 @@ def window(raster_in, shape):
 
     xsize, xend = src.width // shape[1], src.width % shape[1]
     ysize, yend = src.height // shape[0], src.height % shape[0]
-
+    
+    
     y_off = 0
+    y_inx = 0
     inxs = []
     inx = {}
     windows = []
     for ax0 in range(shape[0]):
-
+        
+        
         x_off = 0
+        x_inx = 0
 
         if (ax0 == (shape[0] - 1)):
             height = ysize + yend
@@ -147,8 +155,11 @@ def window(raster_in, shape):
             windown = Window(x_off, y_off, width, height)
 
             windows.append(windown)
-
-            # ------------------------------
+            
+            
+            
+            '''
+            
             start = x_off
             end = x_off + width
             inx['x'] = (start, end)
@@ -158,11 +169,15 @@ def window(raster_in, shape):
             inx['y'] = (start, end)
 
             inxs.append(inx.copy())
-            # ------------------------------
-
+            '''
+            
+            inxs.append((y_inx,x_inx))
+            
             x_off += width
-
+            x_inx += 1
+        
         y_off += height
+        y_inx += 1
 
     return windows, inxs
 
@@ -242,11 +257,11 @@ def out(out_path, data, profile, shape=None):
 
     if not (shape is None):
         if len(shape) == 2:
-            shape = [1] + [i for i in shape]
+            shape = [1] + list(shape)
         data = np.array(data).reshape(shape)
 
     elif len(data.shape) == 2:
-        shape = [1] + [i for i in data.shape]
+        shape = [1] + list(data.shape)
         data = np.array(data).reshape(shape)
 
     with rasterio.open(out_path, 'w', **profile) as src:
@@ -342,7 +357,7 @@ def resampling(raster_in, out_path=None, get_ds=True,
 
             profile.data.update({'height': out_shape[1], 'width': out_shape[2], 'transform': transform})
 
-            resampling_how = how if type(how) is int else getattr(Resampling, how)
+            resampling_how = how if isinstance(how, int) else getattr(Resampling, how)
             data = src.read(out_shape=out_shape, resampling=resampling_how)
         else:
             data = src.read()
@@ -359,7 +374,7 @@ def resampling(raster_in, out_path=None, get_ds=True,
 
     if re_shape:
         if len(re_shape) == 2:
-            re_shape = [count] + [i for i in re_shape]
+            re_shape = [count] + list(re_shape)
         out_shape = re_shape
 
         # 更新
@@ -469,7 +484,7 @@ def reproject(raster_in, dst_in=None,
 
     profile = src.profile
     if len(shape) == 2:
-        shape = [src.count] + [i for i in shape]
+        shape = [src.count] + list(shape)
 
     dst_transform, dst_width, dst_height = calculate_default_transform(src.crs, crs, src.width, src.height, *src.bounds,
                                                                        resolution=resolution, dst_width=shape[2],
@@ -477,13 +492,14 @@ def reproject(raster_in, dst_in=None,
 
     profile.update({'crs': crs, 'transform': dst_transform, 'width': dst_width, 'height': dst_height})
 
-    how = how if type(how) is int else getattr(Resampling, how)
+    how = how if isinstance(how, int) else getattr(Resampling, how)
 
     lst = []
     for i in range(1, src.count + 1):
         arrn = src.read(i)
         dst_array = np.empty((dst_height, dst_width), dtype=profile['dtype'])
-        reproject_(  # 源文件参数
+        _reproject(  
+            # 源文件参数
             source=arrn,
             src_crs=src.crs,
             src_transform=src.transform,
@@ -491,6 +507,7 @@ def reproject(raster_in, dst_in=None,
             destination=dst_array,
             dst_transform=dst_transform,
             dst_crs=crs,
+            dst_nodata=src.nodata,
             # 其它配置
             resampling=how,
             num_threads=2)
@@ -508,12 +525,12 @@ def reproject(raster_in, dst_in=None,
     else:
         return dst_arr, profile
 
-
 def extract(raster_in, dst_in,
             out_path=None, get_ds=True):
     """
 
     栅格按栅格掩膜提取
+    (对掩膜栅格有效值位置栅格值进行提取)
 
 
     Parameters
@@ -532,6 +549,7 @@ def extract(raster_in, dst_in,
     ------
     Exception
         二者的'crs'、 'raster_size'、 'transform'需统一,可先调用unify函数统一栅格数据
+        或使用extract_unify函数
 
 
 
@@ -561,13 +579,19 @@ def extract(raster_in, dst_in,
     # 获得有效值掩膜
     mask = dst.dataset_mask()
 
-    if len(mask) == 3:
+    if len(mask.shape) == 3:
         mask = mask.max(axis=0)
 
     mask = np.array([mask for i in range(src.count)])
 
     # 按掩膜提取
     arr = src.read()
+    
+    
+    # arr = np.where(mask == 0, src.nodata, arr)
+    
+
+    
     shape = arr.shape
     df_mask = pd.DataFrame(mask.reshape(-1, 1))
     df_src = pd.DataFrame(arr.reshape(-1, 1))
@@ -783,7 +807,7 @@ def extract_unify(raster_in, dst_in,
 
     """
 
-    # 先将掩膜数据属性转换致与输入数据相同
+    # 先将掩膜数据属性转换至与输入数据相同
     ds = unify(raster_in=dst_in, dst_in=raster_in, out_path=None, get_ds=True, **kwargs)
 
     return extract(raster_in=raster_in, dst_in=ds, out_path=out_path, get_ds=get_ds)
@@ -797,53 +821,23 @@ if __name__ == '__main__':
     
     
     
-    raster_in = r'F:/PyCharm/pythonProject1/arcmap/010栅格数据统一/蒸散(处理数据)/2001.tif'
+    raster_in = r'C:\GIS\基础数据集\模型静态数据全国1KM\静态数据\地表粗糙度\rough_china1km.flt'
 
     dst_in = r'F:/PyCharm/pythonProject1/arcmap/010栅格数据统一/降水(目标数据)/2001.tif'
 
-    out_path = r'F:\PyCharm\pythonProject1\arcmap\010栅格数据统一\new\测试.tif'
+    out_path = r'F:\PyCharm\pythonProject1\arcmap\010栅格数据统一\new\测试3.tif'
     
-    
-    ds = resampling(raster_in,re_scale=3)
-    
-    out_ds(ds, out_path)
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    out_path1 = r'F:\PyCharm\pythonProject1\arcmap\010栅格数据统一\new\测试2.tif'
 
 
 
+    unify(dst_in, raster_in, out_path1)
+
+    extract_unify(raster_in, dst_in,out_path)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    # out_ds(ds_pro, out_path)
 
 
 
