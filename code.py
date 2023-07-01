@@ -56,6 +56,12 @@ def get_num(x,lst_and = []):
 # -----------------------------------------------------------------------------------------
 
 def isiterable(x):
+    
+    '''
+    判断x能否迭代
+    
+    返回 bool类型
+    '''
     try:
         iter(x)
         return True
@@ -65,6 +71,22 @@ def isiterable(x):
 
 
 def evals(*runs,**kwargs):
+    '''
+    批量操作函数
+
+    Parameters
+    ----------
+    *runs : TYPE
+        操作字符串集
+    **kwargs : TYPE
+        额外可用变量，默认可用此文件全局变量
+
+    Returns
+    -------
+    returns : 
+        结果列表,如果列表只有一个元素，则直接返回这个元素
+
+    '''
     
     returns = []
     for run in runs:
@@ -87,8 +109,33 @@ def evals(*runs,**kwargs):
     return returns
 
 
-def getattrs(src, *args, ds={},**kwargs):
-    
+def getattrs(src, *args, ds={}, get_runs=False, **kwargs):
+    '''
+    批量获得类属性
+
+    Parameters
+    ----------
+    src : class
+        被查询的类.
+    *args : TYPE
+        所需属性或函数（类中存在的，输入属性名、函数名即可）
+    ds : TYPE, optional
+        额外可用变量（优先级更高，可自行修改优先级），供操作函数使用，默认可用此文件全局变量. The default is {}.
+    get_runs : TYPE, optional
+        是否返回操作字符串列表. The default is False.
+    **kwargs : 字典值获得对应属性所需操作，可为表达式，默认参数以字典形式写在“//ks//”之后，在ds中输入相应变量可替代默认参数
+            非自身类函数调用时及自身在dic、kwargs中定义的属性调用时，src不可省略。
+            必须使用src代表源数据。
+
+            合并属性返回类型为list. e.g.'raster_size': ('height', 'width') -> [900, 600]
+            如需特定属性请用函数. e.g. 'raster_size': r"(src.height, src.width)" or r"pd.Serise([src.height, src.width])"
+
+    Returns
+    -------
+    if get_runs:返回操作字符串列表
+    else:args对应属性值列表
+
+    '''
     
     ds.update({'src':src})
     
@@ -103,50 +150,68 @@ def getattrs(src, *args, ds={},**kwargs):
     # 对需要的操作（run）进行整理
     runs = []
     for arg in args:
-        
-        
-        # 自定义属性处理
-        add_attr = {k:v for k,v in kwargs.items() if f'src.{k}' in arg}
-        # n = 0
-        while ((arg in kwargs) or add_attr):
-            try:
-                
-                arg = kwargs[arg]
-                add_attr = {k:v for k,v in kwargs.items() if f'src.{k}' in arg}
-            except:
-                # 需要函数表达式操作的属性
-                for attr,attr_run in add_attr.items(): 
+        try:
+           # 跳过unhashable type, e.g. list、set
+           arg in {}
+        except:
+           pass
+        else:
+            # 自定义属性处理
+            add_attr = {k:v for k,v in kwargs.items() if f'src.{k}' in arg}
+            # n = 0
+            while ((arg in kwargs) or add_attr):
+                try:
                     
-                    # n += 1
-                    # if hasattr(src, attr) | (not(amend)):
-                    #     continue
-                    attr_value = getattrs(src,attr_run,ds=ds,**kwargs)
-                    setattr(src,attr,attr_value)
-                    # arg = arg.replace(attr,f'__attr{n}')
-                    # ds.update({f'__attr{n}':attr_value})
-                break
+                    arg = kwargs[arg]
+                    add_attr = {k:v for k,v in kwargs.items() if f'src.{k}' in arg}
+                except:
+                    # 需要函数表达式操作的属性
+                    for attr,attr_run in add_attr.items(): 
+                        
+                        ## 如果存在这个属性且不修改(not amend)则跳过
+                        # if hasattr(src, attr) & (not(amend)):
+                        #     continue
+                        
+                        # 调用getattrs获得属性
+                        attr_value = getattrs(src,attr_run,ds=ds,**kwargs)
+                        
+                        # 为源数据添加属性------1/2
+                        setattr(src,attr,attr_value)
+                        
+                        ## 不会改变源数据，而是更新表达式及可用变量集(ds)------1/2
+                        # arg = arg.replace(attr,f'__attr{n}')
+                        # ds.update({f'__attr{n}':attr_value})
+                        # n += 1
+                    break
         
-        # 参数处理
-        if (r'//ks//' in arg):
-            arg,ks = arg.split(r'//ks//')
-            
-            ks = eval(ks)  #<<<<<<取出默认参数
-            ks.update(ds)  #<<<<<<输入参数覆盖默认参数
-            ds = ks  
-            
-        
+
         if isiterable(arg) & (type(arg) != str):
             # 递归
-            return getattrs(src, *arg,**kwargs)
+            run = getattrs(src, *arg, get_runs=True, **kwargs)
         else:
-            # 整理
-            # run = f'src.{arg}' if (not ('src' in arg)) & (n==0) else arg
+            # 参数处理
+            if (r'//ks//' in arg):
+                arg,ks = arg.split(r'//ks//')
+                
+                ks = eval(ks)  #<<<<<<取出默认参数
+                ks.update(ds)  #<<<<<<输入参数覆盖默认参数
+                ds = ks 
+            
+            
+            # 整理run
+            # 为源数据添加属性------2/2
             run = f'src.{arg}' if not ('src' in arg) else arg
             
-            runs.append(run)
-    
+            ## 不会改变源数据，而是更新表达式及可用变量集(ds)------2/2
+            # run = f'src.{arg}' if (not ('src' in arg)) & (n==0) else arg
+            
+        runs.append(run)
+    # 返回runs
+    if get_runs:
+        return runs
     # 调用批量操作函数
-    return evals(*runs,**ds)
+    else:
+        return evals(*runs,**ds)
 
 
 def add_attrs(src, run=False, ds={}, **attrs_dict):
@@ -271,7 +336,6 @@ def ungroup(dictData,dtype = False):
         
         
         
-
 
 
 
