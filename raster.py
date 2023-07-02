@@ -136,7 +136,7 @@ def check(raster_in, dst_in, need=None, *args):
     src_arrts = get_RasterArrt(raster_in, arrtnames)
     dst_arrts = get_RasterArrt(dst_in, arrtnames)
     
-    diffe = [arrtnames(i) for i in len(arrtnames) if src_arrts[i] != dst_arrts[i]]
+    diffe = [arrtnames[i] for i in range(len(arrtnames)) if src_arrts[i] != dst_arrts[i]]
     
     if diffe == []:
         return True,[]
@@ -188,7 +188,7 @@ def window(raster_in, shape):
     y_off = 0
     y_inx = 0
     inxs = []
-    inx = {}
+    # inx = {}
     windows = []
     for ax0 in range(shape[0]):
         
@@ -631,16 +631,16 @@ def extract(raster_in, dst_in,
         raise Exception(exc)
 
     # 获得有效值掩膜
-    mask = dst.dataset_mask()
+    mask_arr = dst.dataset_mask()
 
-    if len(mask.shape) == 3:
-        mask = mask.max(axis=0)
+    if len(mask_arr.shape) == 3:
+        mask_arr = mask_arr.max(axis=0)
 
-    mask = np.array([mask for i in range(src.count)])
+    mask_arr = np.array([mask_arr for i in range(src.count)])
 
     # 按掩膜提取
     arr = src.read()
-    arr = np.where(mask == 0, src.nodata, arr)
+    arr = np.where(mask_arr == 0, src.nodata, arr)
 
     profile = src.profile
 
@@ -766,7 +766,7 @@ def clip(raster_in,
         if dst_in is None:
             raise Exception('\nclip:\n    使用extract，dst_in必填且为栅格')
 
-        # 如果栅格大小不同
+        # 如果栅格大小不同,重采样
         src_shape = (dst_height, dst_width)
         dst_shape = get_RasterArrt(dst_in, 'raster_size')
 
@@ -853,61 +853,13 @@ def unify(raster_in, dst_in, out_path=None, get_ds=True, **kwargs):
     return resampling(raster_in=ds, out_path=out_path, get_ds=get_ds, re_shape=shape,**kwargs_resapilg)
 
 
-def extract_unify(raster_in, dst_in,
-                  Clip=False,
-                  out_path=None, get_ds=True, **kwargs):
-    """
-    栅格按栅格掩膜提取
-    (含统一操作)
-    --------------------------
-
-    raster_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py))
-        输入栅格数据或栅格地址
-    dst_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py)), optional
-        掩膜的栅格数据或栅格地址
-    Clip : bool,optional
-        是否按裁剪
-    out_path : str, optional
-        输出地址. The default is None.
-    get_ds : bool, optional
-        返回提取后的栅格数据(io.DatasetWriter). The default is True.
-
-
-
-    Returns
-    ------------------
-    if out_path:生成栅格文件，不返回
-    elif get_ds:返回提取后栅格数据(io.DatasetWriter)
-    else:返回提取后的栅格矩阵（array）和 profile
-
-    """
-    
-    # 裁剪则调用clip_unify函数
-    if Clip:
-        return clip_unify(raster_in, dst_in, Extract=True, out_path=out_path, get_ds=get_ds,**kwargs)
-    
-
-    # 先保证掩膜数据属性与输入数据相同
-    arrtnames = ('crs', 'raster_size', 'cell_size')
-
-    src_arrts = get_RasterArrt(raster_in, arrtnames)
-    dst_arrts = get_RasterArrt(dst_in, arrtnames)
-
-    if src_arrts != dst_arrts:
-        ds = unify(raster_in=dst_in, dst_in=raster_in, out_path=None, get_ds=True, **kwargs)
-    else:
-        ds = dst_in
-        
-    # 调用extract函数
-    return extract(raster_in=raster_in, dst_in=ds, out_path=out_path, get_ds=get_ds)
-    
-
-def clip_unify(raster_in,dst_in=None,bounds=None,
+def clip_u(raster_in,dst_in=None,bounds=None,
          Extract=False,
          out_path=None, get_ds=True,**kwargs):
     '''
     栅格裁剪
-    (含统一空间参考)
+    按范围裁剪。
+    支持不同空间参考，不同分辨率，可提取。
     
 
     Parameters
@@ -921,7 +873,7 @@ def clip_unify(raster_in,dst_in=None,bounds=None,
    
     Extract : bool.optional
        调用extract函数
-       是否对目标dst_in有效值位置的数据进行提取
+       是否对原栅格处于掩膜栅格有效值位置的值进行提取
        (类似矢量按周长边界裁剪栅格，dst_in必填且为栅格). The default is False.
    
     out_path : str, optional
@@ -931,7 +883,8 @@ def clip_unify(raster_in,dst_in=None,bounds=None,
       
     Raises
     ------
-       "dst_in"和"bounds"必须输入其中一个
+       1. "dst_in"和"bounds"必须输入其中一个
+       2. 使用extract，dst_in必填且为栅格
        
        
     Returns
@@ -955,12 +908,6 @@ def clip_unify(raster_in,dst_in=None,bounds=None,
         excs = "\nclip:\n\n    \"dst_in\"和\"bounds\"必须输入其中一个"
         raise Exception(excs)
     
-    
-    # 先提取再裁剪
-    if Extract:
-        ds = extract_unify(raster_in, dst_in, **kwargs)
-        return clip_unify(ds, dst_in, out_path=out_path, get_ds=get_ds)
-    
     # 保证空间参考统一
     src_crs = get_RasterArrt(raster_in,'crs')
     dst_crs = get_RasterArrt(dst_in,'crs')
@@ -969,10 +916,50 @@ def clip_unify(raster_in,dst_in=None,bounds=None,
         ds = reproject(dst_in,raster_in)
     
     # 调用clip函数
-    return clip(raster_in=raster_in, dst_in=ds, out_path=out_path, get_ds=get_ds)
+    return clip(raster_in=raster_in, dst_in=ds, Extract=Extract, out_path=out_path, get_ds=get_ds)
     
     
+def mask(raster_in, dst_in,
+         Clip=False,
+         out_path=None, get_ds=True, **kwargs):
+    """
+    栅格按栅格掩膜提取,
+    对原栅格处于掩膜栅格有效值位置的值进行提取，
+    支持不同坐标参考、不同分辨率栅格。
 
+    --------------------------
+
+    raster_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py))
+        输入栅格数据或栅格地址
+    dst_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py)), optional
+        掩膜的栅格数据或栅格地址
+    Clip : bool,optional
+        是否裁剪
+    out_path : str, optional
+        输出地址. The default is None.
+    get_ds : bool, optional
+        返回提取后的栅格数据(io.DatasetWriter). The default is True.
+
+
+
+    Returns
+    ------------------
+    if out_path:生成栅格文件，不返回
+    elif get_ds:返回提取后栅格数据(io.DatasetWriter)
+    else:返回提取后的栅格矩阵（array）和 profile
+
+    """
+    
+    # 裁剪则调用clip_unify函数
+    if Clip:
+        return clip_u(raster_in, dst_in, Extract=True, out_path=out_path, get_ds=get_ds,**kwargs)
+    
+    # 先保证掩膜数据属性与输入数据相同
+    ds = unify(raster_in=dst_in, dst_in=raster_in, out_path=None, get_ds=True, **kwargs)
+        
+    # 调用extract函数
+    return extract(raster_in=raster_in, dst_in=ds, out_path=out_path, get_ds=get_ds)
+    
 
 if __name__ == '__main__':
     
@@ -983,7 +970,7 @@ if __name__ == '__main__':
 
     out_path = r'F:\PyCharm\pythonProject1\arcmap\010栅格数据统一\new\测试3.tif'
     
-    out_path1 = r'F:\PyCharm\pythonProject1\arcmap\010栅格数据统一\new\测试2.tif'
+    out_path1 = r'F:\PyCharm\pythonProject1\arcmap\010栅格数据统一\new\测试5.tif'
 
 
     
@@ -991,7 +978,7 @@ if __name__ == '__main__':
 
 
     a,b,c = get_RasterArrt(raster_in,'shape_b','crs','shape')
-    unify(dst_in, raster_in, out_path1)
+    mask(raster_in, dst_in, out_path=out_path1,Clip=1)
 
     # extract_unify(raster_in, dst_in,out_path=out_path1)
 
