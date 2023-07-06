@@ -19,6 +19,8 @@ import inspect
 from rasterio.warp import reproject as _reproject
 
 
+
+
 def create_raster(**kwargs):
     memfile = rasterio.MemoryFile()
     return memfile.open(**kwargs)
@@ -103,7 +105,7 @@ def add_attrs_raster(src, ds={}, **kwargs):
 
 
 
-def check(raster_in, dst_in, need=None, *args):
+def check(raster_in, dst_in, need=None,printf=False, *args):
     '''
     检验栅格数据是否统一
     (空间参考、范围、栅格行列数)
@@ -141,6 +143,10 @@ def check(raster_in, dst_in, need=None, *args):
     
     diffe = [arrtnames[i] for i in range(len(arrtnames)) if src_arrts[i] != dst_arrts[i]]
     
+    if printf:
+        # 规范打印
+        [print(f'\n{"-"*70}\n{"-"*int((70-len(arrtnames[i]))/2-2)}<{arrtnames[i]}>{"-"*(70-int((70-len(arrtnames[i]))/2-2)-len(arrtnames[i])-5)}---\n--->src: {src_arrts[i]}\n--->dst: {dst_arrts[i]}') for i in range(len(arrtnames)) if arrtnames[i] in diffe]
+    
     if diffe == []:
         return True,[]
     else:
@@ -148,7 +154,11 @@ def check(raster_in, dst_in, need=None, *args):
     
     
 
-def _return(out_path,get_ds,arr,profile):
+def _return(out_path,get_ds,arr=None,profile=None,ds=None):
+    if ds:
+        profile = ds.profile
+        arr = ds.read()
+    
     if out_path:
         with rasterio.open(out_path, 'w', **profile) as ds:
             ds.write(arr)
@@ -676,7 +686,8 @@ def extract(raster_in, dst_in,
 
 def clip(raster_in,
          dst_in=None, bounds=None,
-         Extract=False,
+         inner=False,
+         Extract=False,mask=False,
          out_path=None, get_ds=True):
     """
     栅格按范围裁剪
@@ -744,49 +755,84 @@ def clip(raster_in,
 
     if (inter[2] <= inter[0]) | (inter[3] <= inter[1]):
         # print('输入范围与栅格不重叠')
-        warnings.warn('\nclip: 输入范围与栅格不重叠')
-
-    # 填充范围
+        if inner:
+            Exception('\nclip: 输入范围与栅格不重叠')
+        else:
+            warnings.warn('\nclip: 输入范围与栅格不重叠')
+        
+    
     
     # uint8格式，None无法输出
     if (profile['dtype'] == 'uint8') & (nodata == None) :
          profile.update({'dtype':np.float64,'nodata': np.nan})
          nodata = np.nan
 
+    if inner:
+        # 取相交范围
+        src_arr = src.read()
+        a = int((inter[0] - bounds_src[0]) / xsize)
+        b = int((bounds_src[3] - inter[1]) / ysize)
+        c = int((inter[2] - bounds_src[0]) / xsize)
+        d = int((bounds_src[3] - inter[3]) / ysize)
+        
+        # dst_arr = src_arr[:, d:b, a:c]
+
+        if mask:
+            dst_arr = np.full(src_arr.shape, nodata, object)
+            dst_arr[:, d:b, a:c] = src_arr[:, d:b, a:c]
+            dst_height = src_arr.shape[1]
+            dst_width = src_arr.shape[2]
+            dst_bounds = bounds_src
+        else:
+            dst_arr = src_arr[:, d:b, a:c]
+            dst_height = b - d
+            dst_width = c - a
+            dst_bounds = inter
+        
     
+    else:
+        # 取目标范围
+        
+        # 填充范围
+        # 并集
+        union = (min(bounds[0], bounds_src[0]),  # west
+                 min(bounds[1], bounds_src[1]),  # south
+                 max(bounds[2], bounds_src[2]),  # east
+                 max(bounds[3], bounds_src[3]))  # north
+    
+        union_shape = (src.count, int((union[3] - union[1]) / ysize) + 1, int((union[2] - union[0]) / xsize) + 1)
+        union_arr = np.full(union_shape, nodata, object)
+    
+        # 填入源数据栅格值
+        src_arr = src.read()
+    
+        a = int((bounds_src[0] - union[0]) / xsize)
+        d = int((union[3] - bounds_src[3]) / ysize)
+        union_arr[:, d:d + src.height, a:a + src.width] = src_arr
+    
+        # clip,提取输入范围内的值
+        a = int((bounds[0] - union[0]) / xsize)
+        b = int((union[3] - bounds[1]) / ysize)
+        c = int((bounds[2] - union[0]) / xsize)
+        d = int((union[3] - bounds[3]) / ysize)
     
 
-    # 并集
-    union = (min(bounds[0], bounds_src[0]),  # west
-             min(bounds[1], bounds_src[1]),  # south
-             max(bounds[2], bounds_src[2]),  # east
-             max(bounds[3], bounds_src[3]))  # north
+        if mask:
+            dst_arr = np.full(union_shape, nodata, object)
+            dst_arr[:, d:b, a:c] = union_arr[:, d:b, a:c]
+            dst_height = union_arr.shape[1]
+            dst_width = union_arr.shape[2]
+            dst_bounds = union
+        else:
+            dst_arr = union_arr[:, d:b, a:c]
+            dst_height = b - d
+            dst_width = c - a
+            dst_bounds = bounds
 
-    union_shape = (src.count, int((union[3] - union[1]) / ysize) + 1, int((union[2] - union[0]) / xsize) + 1)
-    union_arr = np.full(union_shape, nodata, object)
-
-    # 填入源数据栅格值
-    arr = src.read()
-
-    a = int((bounds_src[0] - union[0]) / xsize)
-    d = int((union[3] - bounds_src[3]) / ysize)
-    union_arr[:, d:d + src.height, a:a + src.width] = arr
-
-    # clip,提取输入范围内的值
-    a = int((bounds[0] - union[0]) / xsize)
-    b = int((union[3] - bounds[1]) / ysize)
-    c = int((bounds[2] - union[0]) / xsize)
-    d = int((union[3] - bounds[3]) / ysize)
-
-    dst_height = b - d
-    dst_width = c - a
-    dst_arr = union_arr[:, d:b, a:c]
+        
     
     
-    
-    
-    
-    dst_transform = rasterio.transform.from_bounds(*bounds, dst_width, dst_height)
+    dst_transform = rasterio.transform.from_bounds(*dst_bounds, dst_width, dst_height)
 
     profile.update({'height': dst_height,
                     'width': dst_width,
@@ -900,7 +946,12 @@ def unify(raster_in, dst_in,
           Extract=False, how='mode',
           **kwargs):
     """
-    统一栅格数据(空间参考、范围、行列数)
+    统一栅格数据
+    (空间参考、范围、行列数)
+    
+    范围的误差在小数点后9位左右(绝大多数时候用bounds也不会报错)，
+    因此检查统一函数check比较的范围Bounds为bounds精确到小数点后六位。
+    如有问题可用check中printf参数查看
 
     Parameters
     ----------
@@ -955,13 +1006,10 @@ def unify(raster_in, dst_in,
     # 检查哪些属性需要统一
     judge,dif = check(src,dst)
     if judge:
-        profile = src.profile
-        arr = src.read()
-        return _return(out_path,get_ds,arr,profile)
-
+        return _return(out_path,get_ds,ds=src)
     elif 'crs' in dif:
         run = 3
-    elif 'bounds' in dif:
+    elif 'Bounds' in dif:
         run = 2
     elif 'raster_size' in dif:
         run = 1
@@ -986,23 +1034,37 @@ def unify(raster_in, dst_in,
         kwargs_clip.update({k: v for k, v in kwargs.items() if k in inspect.getfullargspec(clip)[0]}) #接收其他参数 
         ds = clip(raster_in=ds, dst_in=dst,**kwargs_clip)
     # 重采样（行列数）
+    if ds.shape[-2:] == src.shape[-2:]:
+        return _return(out_path,get_ds,ds=ds)
     kwargs_resapilg = {}  # 设置默认参数
     kwargs_resapilg.update({k: v for k, v in kwargs.items() if k in inspect.getfullargspec(resampling)[0]})  #接收其他参数 
-    return resampling(raster_in=ds, out_path=out_path,how=how, get_ds=get_ds, re_shape=shape, re_size=False, re_scale=None, **kwargs_resapilg)
-    
-    
-        
-    
+    return resampling(raster_in=ds, out_path=out_path,how=how, get_ds=get_ds, re_shape=shape, re_size=None, re_scale=None, **kwargs_resapilg)
+
     
 
 
-def clip_u(raster_in,dst_in=None,bounds=None,
-         Extract=False,
-         out_path=None, get_ds=True,**kwargs):
+
+"""
+以下函数包含统一空间参考
+
+如须多次使用同一目标栅格dst_in，建议先手动使用reproject统一，减少reproject函数的调用
+手动统一后可以不去寻找原函数，函数会跳过以统一栅格
+
+
+"""
+
+
+
+def clip_u(raster_in,
+           dst_in=None,bounds=None,
+           inner=False,
+           Extract=False,mask=False,
+           out_path=None, get_ds=True,**kwargs):
     '''
     栅格裁剪
     按范围裁剪。
-    含临时统一操作，可提取。
+    可提取。
+    含临时统一投影操作。
     
 
     Parameters
@@ -1013,12 +1075,16 @@ def clip_u(raster_in,dst_in=None,bounds=None,
        目标范围的栅格数据或栅格地址
     bounds : tuple, optional
        目标范围(左，下，右，上)
-   
+      
+    inner : 是否取交集，默认False
+    
     Extract : bool.optional
        调用extract函数
        是否对原栅格处于掩膜栅格有效值位置的值进行提取
        (类似矢量按周长边界裁剪栅格，dst_in必填且为栅格). The default is False.
-   
+    
+    mask : 是否保留并集
+    
     out_path : str, optional
        输出地址. The default is None.
     get_ds : bool, optional
@@ -1044,7 +1110,7 @@ def clip_u(raster_in,dst_in=None,bounds=None,
 
     # 按范围裁剪，无须统一
     if bounds:
-        return clip(raster_in=raster_in, bounds=bounds, out_path=out_path, get_ds=get_ds)
+        return clip(raster_in=raster_in, bounds=bounds, out_path=out_path, get_ds=get_ds,mask=mask, inner=inner)
     
     # 检查参数
     if not dst_in:
@@ -1059,32 +1125,52 @@ def clip_u(raster_in,dst_in=None,bounds=None,
         ds = reproject(dst_in,raster_in)
     
     # 调用clip函数
-    return clip(raster_in=raster_in, dst_in=ds, Extract=Extract, out_path=out_path, get_ds=get_ds)
-    
-    
-def mask(raster_in, dst_in,
-         Clip=False,
-         out_path=None, get_ds=True, **kwargs):
+    return clip(raster_in=raster_in, dst_in=ds,inner=inner,mask=mask, Extract=Extract, out_path=out_path, get_ds=get_ds) 
+
+
+
+
+def mask(raster_in,
+         dst_in=None,bounds=None,
+         Extract=False,Clip=True,
+         out_path=None, get_ds=True,**kwargs):
     """
     栅格按栅格掩膜提取,
-    对原栅格处于掩膜栅格有效值位置的值进行提取，
-    含临时统一操作
+    对原栅格处于掩膜栅格有效值位置的值进行提取，也可对范围提取
+    支持不同空间参考
+    
 
     --------------------------
 
     raster_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py))
         输入栅格数据或栅格地址
+        
     dst_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py)), optional
         掩膜的栅格数据或栅格地址
+    bounds : tuple, optional
+        目标范围(左，下，右，上),bounds与dst_in填其中一个，bounds优先级更高
+    
+    
+    Extract : bool.optional
+        调用extract函数
+        是否对目标dst_in有效值位置的数据进行提取
+        (类似矢量按周长边界裁剪栅格，dst_in必填且为栅格). The default is False.
+        
     Clip : bool,optional
-        是否裁剪
+        是否裁剪. The default is True.
     out_path : str, optional
         输出地址. The default is None.
     get_ds : bool, optional
         返回提取后的栅格数据(io.DatasetWriter). The default is True.
 
-
-
+    
+    Raises
+    ------
+       1. "dst_in"和"bounds"必须输入其中一个
+       2. 使用extract，dst_in必填且为栅格
+       3. 须保证范围与输入栅格有重叠
+      
+       
     Returns
     ------------------
     if out_path:生成栅格文件，不返回
@@ -1093,17 +1179,24 @@ def mask(raster_in, dst_in,
 
     """
     
-    # 裁剪则调用clip_unify函数
-    if Clip:
-        return clip_u(raster_in, dst_in, Extract=True, out_path=out_path, get_ds=get_ds,**kwargs)
-    
-    # 先保证掩膜数据属性与输入数据相同
-    ds = unify(raster_in=dst_in, dst_in=raster_in, out_path=None, get_ds=True, **kwargs)
-        
-    # 调用extract函数
-    return extract(raster_in=raster_in, dst_in=ds, out_path=out_path, get_ds=get_ds)
-    
 
+    
+    return clip_u(raster_in=raster_in,
+                  dst_in=dst_in,bounds=bounds,
+                  inner=True,
+                  Extract=Extract,mask=not(Clip),
+                  out_path=out_path, get_ds=get_ds,**kwargs)
+
+       
+"""
+以下函数内部调用unify统一函数，支持不同空间参考、范围、行列数栅格之间的操作
+不更改原栅格，将目标栅格向原栅格转换，以下函数都是如此
+
+如须多次使用同一目标栅格dst_in，建议先手动使用unify统一，减少unify函数的调用，
+手动统一后可以不去寻找原函数，函数会跳过以统一栅格
+
+
+"""
 
 def zonal_u(raster_in, dst_in, stats,dic=None,**kwargs):
     '''
@@ -1134,7 +1227,75 @@ def zonal_u(raster_in, dst_in, stats,dic=None,**kwargs):
     
     ds = unify(dst_in, raster_in, out_path=None, **kwargs)
     return zonal(raster_in=raster_in,dst_in=ds, stats=stats,dic=dic)
+       
+ 
+'''
+clip更新后，clip_u好像能完全取代这写法
+
+def mask(raster_in,
+         dst_in=None,bounds=None,
+         Clip=False,inner=True,
+         out_path=None, get_ds=True, **kwargs):
+    """
+    栅格按栅格掩膜提取,
+    对原栅格处于掩膜栅格有效值位置的值进行提取，也可对范围提取
+    含临时统一操作
+
+    --------------------------
+
+    raster_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py))
+        输入栅格数据或栅格地址
+    dst_in : (str or io.DatasetReader or io.DatasetWriter...(in io.py)), optional
+        掩膜的栅格数据或栅格地址
+    Clip : bool,optional
+        是否裁剪
+    out_path : str, optional
+        输出地址. The default is None.
+    get_ds : bool, optional
+        返回提取后的栅格数据(io.DatasetWriter). The default is True.
+
+
+
+    Returns
+    ------------------
+    if out_path:生成栅格文件，不返回
+    elif get_ds:返回提取后栅格数据(io.DatasetWriter)
+    else:返回提取后的栅格矩阵（array）和 profile
+
+    """
     
+    
+    
+    
+    
+    
+    # 裁剪则调用clip_unify函数
+    if (Clip & dst_in) | (Clip & bounds):
+        return clip_u(raster_in=raster_in, dst_in=dst_in, bounds=bounds, Extract=True,mask=False,inner=inner,
+                      out_path=out_path, get_ds=get_ds,**kwargs)
+    elif bounds:
+        ds = clip_u(raster_in,bounds=bounds,**kwargs)
+        return unify(raster_in=ds, dst_in=raster_in,out_path=out_path, get_ds=get_ds, **kwargs)
+        
+    # elif bounds:
+    #     ds = clip_u(raster_in,bounds=bounds,**kwargs)
+    #     return unify(raster_in=ds, dst_in=raster_in,out_path=out_path, get_ds=get_ds, **kwargs)
+    
+    # 先保证掩膜数据属性与输入数据相同
+    ds = unify(raster_in=dst_in, dst_in=raster_in, out_path=None, get_ds=True, **kwargs)
+        
+    # 调用extract函数
+    return extract(raster_in=raster_in, dst_in=ds, out_path=out_path, get_ds=get_ds)
+    
+'''
+
+
+
+
+
+
+
+
     
             
 
@@ -1149,23 +1310,42 @@ if __name__ == '__main__':
 
     dst_in = r'F:\PyCharm\pythonProject1\arcmap\007那曲市\data\eva平均\eva_2.tif'
 
-    out_path = r'F:\PyCharm\pythonProject1\代码\mycode\测试文件\1981-5km-tiff3.tif'
+    out_path = r'F:\PyCharm\pythonProject1\代码\mycode\测试文件\1981-5km-tiff13.tif'
     
     out_path1 = r'F:\PyCharm\pythonProject1\arcmap\015温度\zonal\grand_average.xlsx'
 
     
-
+    
+    ds = reproject(dst_in,raster_in)
+    
+    
+    
+    
+    
+    ds_c = mask(raster_in,
+                dst_in=dst_in, bounds=None,
+                inner=1,
+                Extract=False,Clip=True,
+                out_path=None, get_ds=True)
+    
+    
+    
+    
+    
+    
+    
+    
     # ds = unify(out_path, raster_in, how='mode',Extract=True)
 
-    ds = unify(raster_in, dst_in, how='mode',Extract=1)
+    # ds = unify(dst_in, raster_in, how='mode',Extract=1)
     
     
     # dst = extract(raster_in=ds, dst_in=dst_in)
-    out_ds(ds, out_path)
+    out_ds(ds_c, out_path)
     
     
     
-    check(ds,dst_in)
+    # check(ds,raster_in,printf=1)
     # df = zonal(out_path,dst_in, ['mean','max'],dic={1:'森林'})
 
     # extract(raster_in, dst_in)
