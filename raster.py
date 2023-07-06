@@ -1274,8 +1274,7 @@ def mask(raster_in,
         return clip_u(raster_in=raster_in, dst_in=dst_in, bounds=bounds, Extract=True,mask=False,inner=inner,
                       out_path=out_path, get_ds=get_ds,**kwargs)
     elif bounds:
-        ds = clip_u(raster_in,bounds=bounds,**kwargs)
-        return unify(raster_in=ds, dst_in=raster_in,out_path=out_path, get_ds=get_ds, **kwargs)
+        return clip_u(raster_in,bounds=bounds,inner=inner,Extract=False,mask=True,out_path=out_path,get_ds=get_ds**kwargs)
         
     # elif bounds:
     #     ds = clip_u(raster_in,bounds=bounds,**kwargs)
