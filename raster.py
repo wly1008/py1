@@ -7,7 +7,7 @@ Created on Sat 2023/6/19 19:42
 from rasterio.windows import Window
 import warnings
 import rasterio.mask
-import mycode.code as cd
+import mycode.codes as cd
 from functools import partial
 import rasterio
 import pandas as pd
@@ -17,10 +17,6 @@ from rasterio.enums import Resampling
 import os, sys, re
 import inspect
 from rasterio.warp import reproject as _reproject
-
-
-
-
 
 
 def create_raster(**kwargs):
@@ -66,6 +62,7 @@ def get_RasterArrt(raster_in, *args, ds={}, **kwargs):
 
     dic = {'raster_size': r"(src.height, src.width)", 'cell_size': r"(src.xsize, src.ysize)",
            'bends': 'count', 'xsize': r'transform[0]', 'ysize': r'abs(src.transform[4])',
+           'Bounds': r'[float(f"{i:f}") for i in src.bounds]',
            'values': r'src.read().astype(dtype)//ks//{"dtype":np.float64}',
            'arr': r'src.values.reshape(-1, 1)',
            'df': r'pd.DataFrame(src.values.reshape(-1, 1))',
@@ -89,6 +86,7 @@ def add_attrs_raster(src, ds={}, **kwargs):
     """
     dic = {'raster_size': r"(src.height, src.width)", 'cell_size': r"(src.xsize, src.ysize)",
            'bends': 'count', 'xsize': r'transform[0]', 'ysize': r'abs(src.transform[4])',
+           'Bounds': r'[float(f"{i:f}") for i in src.bounds]',
            'values': r'src.read().astype(dtype)//ks//{"dtype":np.float64}',
            'arr': r'src.values.reshape(-1, 1)',
            'df': r'pd.DataFrame(src.values.reshape(-1, 1))',
@@ -109,6 +107,7 @@ def check(raster_in, dst_in, need=None, *args):
     '''
     检验栅格数据是否统一
     (空间参考、范围、栅格行列数)
+    (Bounds为bounds精确到小数点后六位)
 
     Parameters
     ----------
@@ -132,9 +131,13 @@ def check(raster_in, dst_in, need=None, *args):
     if need:
         arrtnames = need
     else:
-        arrtnames = ['crs', 'bounds', 'raster_size'] + [i for i in args if not(i in ['crs', 'bounds', 'raster_size'])]
+        arrtnames = ['crs', 'Bounds', 'raster_size'] + [i for i in args if not(i in ['crs', 'Bounds', 'raster_size'])]
     src_arrts = get_RasterArrt(raster_in, arrtnames)
     dst_arrts = get_RasterArrt(dst_in, arrtnames)
+    
+    
+    
+    
     
     diffe = [arrtnames[i] for i in range(len(arrtnames)) if src_arrts[i] != dst_arrts[i]]
     
@@ -346,7 +349,7 @@ def out_ds(ds, out_path):
 
 
 def resampling(raster_in, out_path=None, get_ds=True,
-               re_shape=False, re_scale=False, re_size=False, how='nearest', printf=False):
+               re_shape=False, re_scale=False, re_size=False, how='mode', printf=False):
     """
     栅格重采样
 
@@ -377,7 +380,7 @@ def resampling(raster_in, out_path=None, get_ds=True,
 
 
     how:(str or int) , optional.
-    重采样方式，The default is nearest.
+    重采样方式，The default is mode.
 
     (部分)
     mode:众数，6;
@@ -472,7 +475,7 @@ def resampling(raster_in, out_path=None, get_ds=True,
 def reproject(raster_in, dst_in=None,
               out_path=None, get_ds=True,
               crs=None,
-              how='nearest',
+              how='mode',
               resolution=None, shape=(None, None, None)):
     """
     栅格重投影
@@ -494,7 +497,7 @@ def reproject(raster_in, dst_in=None,
     
     
     how:(str or int) , optional.
-    重采样方式，The default is nearest.
+    重采样方式，The default is mode.
 
     (部分)
     mode:众数，6;
@@ -599,8 +602,8 @@ def extract(raster_in, dst_in,
     Raises
     ------
     Exception
-        二者的'crs'、 'raster_size'、 'bounds'需统一,可先调用unify函数统一栅格数据
-        或使用extract_unify函数
+        二者的'crs'、 'raster_size'、 'Bounds'需统一,可先调用unify函数统一栅格数据
+        或使用mask函数
 
 
 
@@ -616,19 +619,20 @@ def extract(raster_in, dst_in,
     src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
     dst = dst_in if type(dst_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(dst_in)
 
-    arrtnames = ('crs', 'raster_size', 'bounds')
+    # arrtnames = ('crs', 'raster_size', 'Bounds')
 
-    src_arrts = get_RasterArrt(src, arrtnames)
-    dst_arrts = get_RasterArrt(dst, arrtnames)
+    # src_arrts = get_RasterArrt(src, arrtnames)
+    # dst_arrts = get_RasterArrt(dst, arrtnames)
+    
+    judge,dif = check(src, dst)
 
-    if src_arrts != dst_arrts:
+    if not judge:
         
-        exc = '\nextract 无法正确提取:\n'
-        for i in range(len(arrtnames)):
-            if src_arrts[i] != dst_arrts[i]:
-                exc += f'\n    \"{arrtnames[i]}\" 不一致'
-        exc += '\n\n----<请统一以上属性>'
-        raise Exception(exc)
+        mis = '\nextract 无法正确提取:\n'
+        for i in dif:
+            mis += f'\n    \"{i}\" 不一致'
+        mis += '\n\n----<请统一以上属性>'
+        raise Exception(mis)
 
     # 获得有效值掩膜
     mask_arr = dst.dataset_mask()
@@ -639,10 +643,17 @@ def extract(raster_in, dst_in,
     mask_arr = np.array([mask_arr for i in range(src.count)])
 
     # 按掩膜提取
-    arr = src.read()
-    arr = np.where(mask_arr == 0, src.nodata, arr)
-
     profile = src.profile
+    nodata = src.nodata
+    
+    # uint8格式，None无法输出
+    if (profile['dtype'] == 'uint8') & (nodata == None) :
+        profile.update({'dtype':np.float64,'nodata': np.nan})
+        nodata = np.nan
+    arr = src.read()
+    arr = np.where(mask_arr == 0, nodata, arr)
+
+    
 
     if out_path:
         with rasterio.open(out_path, 'w', **profile) as ds:
@@ -707,16 +718,16 @@ def clip(raster_in,
         bounds, crs = get_RasterArrt(dst_in, 'bounds', 'crs')
 
         if crs != src.crs:
-            excs = '\nclip:\n \"crs\"不一致'
-            raise Exception(excs)
+            mis = '\nclip:\n \"crs\"不一致'
+            raise Exception(mis)
 
     elif bounds:
         pass
     else:
-        excs = "\nclip:\n\n    \"dst_in\"和\"bounds\"必须输入其中一个"
-        raise Exception(excs)
+        mis = "\nclip:\n\n    \"dst_in\"和\"bounds\"必须输入其中一个"
+        raise Exception(mis)
 
-    xsize, ysize, bounds_src, profile = get_RasterArrt(src, 'xsize', 'ysize', 'bounds', 'profile')
+    xsize, ysize, bounds_src, profile, nodata = get_RasterArrt(src, 'xsize', 'ysize', 'bounds', 'profile', 'nodata')
 
     # 判断是否有交集
     inter = (max(bounds[0], bounds_src[0]),  # west
@@ -729,6 +740,14 @@ def clip(raster_in,
         warnings.warn('\nclip: 输入范围与栅格不重叠')
 
     # 填充范围
+    
+    # uint8格式，None无法输出
+    if (profile['dtype'] == 'uint8') & (nodata == None) :
+         profile.update({'dtype':np.float64,'nodata': np.nan})
+         nodata = np.nan
+
+    
+    
 
     # 并集
     union = (min(bounds[0], bounds_src[0]),  # west
@@ -737,7 +756,7 @@ def clip(raster_in,
              max(bounds[3], bounds_src[3]))  # north
 
     union_shape = (src.count, int((union[3] - union[1]) / ysize) + 1, int((union[2] - union[0]) / xsize) + 1)
-    union_arr = np.full(union_shape, src.nodata, object)
+    union_arr = np.full(union_shape, nodata, object)
 
     # 填入源数据栅格值
     arr = src.read()
@@ -755,7 +774,11 @@ def clip(raster_in,
     dst_height = b - d
     dst_width = c - a
     dst_arr = union_arr[:, d:b, a:c]
-
+    
+    
+    
+    
+    
     dst_transform = rasterio.transform.from_bounds(*bounds, dst_width, dst_height)
 
     profile.update({'height': dst_height,
@@ -771,7 +794,7 @@ def clip(raster_in,
         dst_shape = get_RasterArrt(dst_in, 'raster_size')
 
         if src_shape != dst_shape:
-            dst = resampling(raster_in=dst_in, re_shape=src_shape, how='nearest')
+            dst = resampling(raster_in=dst_in, re_shape=src_shape)
         else:
             dst = dst_in
 
@@ -789,6 +812,80 @@ def clip(raster_in,
         return ds
     else:
         return dst_arr, profile
+
+
+
+def zonal(raster_in, dst_in, stats,dic=None):
+    '''
+    分区统计
+    栅格统计栅格
+    分区栅格应为整型栅格
+
+    Parameters
+    ----------
+    raster_in : TYPE
+        输入栅格
+    dst_in : TYPE
+        分区数据栅格
+    stats : 
+       统计类型。基于df.agg(stats) .e.g. 'mean' or ['mean','sum','max']...
+    
+    
+    dic : dict
+        分区数据栅格各值对应属性
+    
+    Raises
+    ------
+    Exception
+        二者的'crs'、 'raster_size'、 'Bounds'需统一,可先调用unify函数统一栅格数据
+        或使用zonal_u函数
+
+    Returns
+    -------
+    所需统计值的dataframe
+
+    '''
+    
+    src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
+    dst = dst_in if type(dst_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(dst_in)
+    
+    
+    judge,dif = check(src, dst)
+
+    if not judge:
+        
+        mis = '\nextract 无法正确提取:\n'
+        for i in dif:
+            mis += f'\n    \"{i}\" 不一致'
+        mis += '\n\n----<请统一以上属性>'
+        raise Exception(mis)
+    
+    
+    df_src = read(src)
+    df_dst = read(dst)
+    
+    df_return = pd.DataFrame(index=(['name']+stats))
+    
+    areas = list(df_dst[0].unique())
+    
+    if len(areas) >= 1000:
+        warnings.warn('\n分区数为%d,分区栅格可能为浮点型栅格'%len(areas))
+    
+    
+    
+    for area in areas:
+        
+        serice = pd.Series(dtype='float64')
+        try:
+            serice['name'] = dic[area]
+        except:
+            serice['name'] = area
+
+        value = df_src[df_dst.isin([area])].agg(stats,axis=0)
+        serice = pd.concat([serice,value])
+        df_return = pd.concat([df_return,serice],axis=1)
+    return df_return.T
+
 
 
 def unify(raster_in, dst_in, out_path=None, get_ds=True, **kwargs):
@@ -809,7 +906,9 @@ def unify(raster_in, dst_in, out_path=None, get_ds=True, **kwargs):
 
 
     **kwargs:
-        接收调用函数(reproject、clip、resampling)的其他参数
+        接收调用函数(reproject、clip、resampling)的其他参数.
+        e.g.how(重采样方法，默认mode众数),
+            Extract(是否按有效值范围提取，默认True)
 
     Returns
     -------
@@ -820,18 +919,18 @@ def unify(raster_in, dst_in, out_path=None, get_ds=True, **kwargs):
     """
     
     # 检查哪些属性需要统一
-    judge,diffe = check(raster_in,dst_in)
+    judge,dif = check(raster_in,dst_in)
     if judge:
         src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
         profile = src.profile
         arr = src.read()
         return _return(out_path,get_ds,arr,profile)
 
-    elif 'crs' in diffe:
+    elif 'crs' in dif:
         run = 3
-    elif 'bounds' in diffe:
+    elif 'bounds' in dif:
         run = 2
-    elif 'raster_size' in diffe:
+    elif 'raster_size' in dif:
         run = 1
     else:
         raise Exception('有问题')
@@ -846,7 +945,8 @@ def unify(raster_in, dst_in, out_path=None, get_ds=True, **kwargs):
         ds = reproject(raster_in=ds, dst_in=dst_in,**kwargs_reproject)
     # 裁剪（范围）
     if run >= 2:
-        kwargs_clip = {k: v for k, v in kwargs.items() if k in inspect.getfullargspec(clip)[0]}  #接收其他参数 
+        kwargs_clip = {'Extract':True}
+        kwargs_clip.update({k: v for k, v in kwargs.items() if k in inspect.getfullargspec(clip)[0]}) #接收其他参数 
         ds = clip(raster_in=ds, dst_in=dst_in,**kwargs_clip)
     # 重采样（行列数）
     kwargs_resapilg = {k: v for k, v in kwargs.items() if k in inspect.getfullargspec(resampling)[0]}  #接收其他参数 
@@ -961,63 +1061,75 @@ def mask(raster_in, dst_in,
     return extract(raster_in=raster_in, dst_in=ds, out_path=out_path, get_ds=get_ds)
     
 
+
+def zonal_u(raster_in, dst_in, stats,dic=None,**kwargs):
+    '''
+    分区统计
+    支持不同空间参考，不同分辨率
+    分区栅格应为整型栅格
+    
+    Parameters
+    ----------
+    raster_in : TYPE
+        输入栅格
+    dst_in : TYPE
+        分区数据栅格
+    stats : 
+       统计类型。基于df.agg(stats) .e.g. 'mean' or ['mean','sum','max']...
+    
+    dic : dict
+        分区数据栅格各值对应属性，默认为值本身
+    **kwargs : TYPE
+       unify可填入的其他参数
+
+    Returns
+    -------
+    dataframe
+        所需统计值的dataframe
+
+    '''
+    
+    ds = unify(dst_in, raster_in,**kwargs)
+    return zonal(raster_in=raster_in,dst_in=ds, stats=stats,dic=dic)
+    
+    
+            
+
+
+
+
+
 if __name__ == '__main__':
     
     
-    raster_in = r'C:\GIS\基础数据集\模型静态数据全国1KM\静态数据\地表粗糙度\rough_china1km.flt'
+    raster_in = r'F:/PyCharm/pythonProject1/arcmap/015温度/土地利用/landuse_4y/1981-5km-tiff.tif'
 
-    dst_in = r'F:/PyCharm/pythonProject1/arcmap/010栅格数据统一/降水(目标数据)/2001.tif'
+    dst_in = r'F:/PyCharm/pythonProject1/arcmap/014/clip/grand_average.tif'
 
-    out_path = r'F:\PyCharm\pythonProject1\arcmap\010栅格数据统一\new\测试3.tif'
+    out_path = r'F:\PyCharm\pythonProject1\arcmap\015温度\土地_unify\1981-5km-tiff.tif'
     
-    out_path1 = r'F:\PyCharm\pythonProject1\arcmap\010栅格数据统一\new\测试5.tif'
+    out_path1 = r'F:\PyCharm\pythonProject1\arcmap\015温度\zonal\grand_average.xlsx'
 
 
+
+    # ds = unify(out_path, raster_in, how='mode',Extract=True)
+
+    # ds = unify(dst_in, raster_in, how='mode',Extract=True)
     
+    # df = zonal(out_path,dst_in, ['mean','max'],dic={1:'森林'})
 
+    # extract(raster_in, dst_in)
 
+    # shape = get_RasterArrt(dst_in,'shape')
 
-    a,b,c = get_RasterArrt(raster_in,'shape_b','crs','shape')
-    mask(raster_in, dst_in, out_path=out_path1,Clip=1)
-
-    # extract_unify(raster_in, dst_in,out_path=out_path1)
-
-    # clip_unify(raster_in, dst_in,out_path=out_path1)
-
-    # out_ds(ds_pro, out_path)
-
-
-
-
-    # x = inspect.signature(read).parameters
+    # ds_pro = reproject(raster_in=raster_in, dst_in=dst_in)
     
-    # x = inspect.getfullargspec(read)
+    # ds_clip = clip(raster_in=ds_pro, dst_in=dst_in,Extract=True)
     
-    # print(x)
+    # ds = resampling(raster_in=ds_clip,re_shape = shape)
     
-    # n = []
-    # k = []
-    # d = []
-    # # y = {k:p.}
-    # for name,p in x.items():
-        
-    #     pass
-    
-       
-       
-
-
-
-
-
-
-
-
-
-
-
-
-
+    # df = zonal_u(raster_in, out_path,['mean','max'])
+    # check(ds,dst_in)
 
 
 
