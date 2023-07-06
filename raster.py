@@ -959,7 +959,7 @@ def clip_u(raster_in,dst_in=None,bounds=None,
     '''
     栅格裁剪
     按范围裁剪。
-    支持不同空间参考，不同分辨率，可提取。
+    含临时统一操作，可提取。
     
 
     Parameters
@@ -1025,7 +1025,7 @@ def mask(raster_in, dst_in,
     """
     栅格按栅格掩膜提取,
     对原栅格处于掩膜栅格有效值位置的值进行提取，
-    支持不同坐标参考、不同分辨率栅格。
+    含临时统一操作
 
     --------------------------
 
@@ -1065,7 +1065,7 @@ def mask(raster_in, dst_in,
 def zonal_u(raster_in, dst_in, stats,dic=None,**kwargs):
     '''
     分区统计
-    支持不同空间参考，不同分辨率
+    含临时统一操作
     分区栅格应为整型栅格
     
     Parameters
