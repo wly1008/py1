@@ -349,7 +349,7 @@ def out_ds(ds, out_path):
 
 
 def resampling(raster_in, out_path=None, get_ds=True,
-               re_shape=False, re_scale=False, re_size=False, how='mode', printf=False):
+               re_shape=None, re_scale=None, re_size=None, how='mode', printf=False):
     """
     栅格重采样
 
@@ -367,10 +367,10 @@ def resampling(raster_in, out_path=None, get_ds=True,
     
     
     ----------
-    
+    重采样类型三选一，都不输入则原样返回
     
     re_shape:形状重采样(tuple)
-    (count, height, width)
+    (height, width) or (count, height, width)
 
     re_size:大小重采样(tuple or number)
     (xsize,ysize) or size
@@ -390,7 +390,7 @@ def resampling(raster_in, out_path=None, get_ds=True,
     ...其余见rasterio.enums.Resampling
 
     printf : 任意值,optional.
-        如果发生重采样，则会打印原形状及输入值。The default is False.
+        如果发生重采样，则会打印原形状及输入的printf值。The default is False.
 
     Returns
     -------
@@ -401,7 +401,7 @@ def resampling(raster_in, out_path=None, get_ds=True,
     """
 
     def update():  # <<<<<<<<<更新函数
-
+        
         if shape != out_shape:
 
             if not (printf is False):
@@ -427,8 +427,13 @@ def resampling(raster_in, out_path=None, get_ds=True,
     shape = (count, height, width)
 
     if re_shape:
-        if len(re_shape) == 2:
-            re_shape = [count] + list(re_shape)
+        if not(2 <= len(re_shape) <= 3):
+            mis = 'resampling:\n当前函数接收re_shape=%s\n请输入二维("height", "width")或三维("count", "height", "width")形状' % str(re_shape)
+            raise Exception(mis)
+        
+        re_shape = list(re_shape)
+        re_shape = [count] + re_shape[-2:]
+
         out_shape = re_shape
 
         # 更新
@@ -666,6 +671,9 @@ def extract(raster_in, dst_in,
         return arr, profile
 
 
+
+
+
 def clip(raster_in,
          dst_in=None, bounds=None,
          Extract=False,
@@ -716,7 +724,6 @@ def clip(raster_in,
     if dst_in:
 
         bounds, crs = get_RasterArrt(dst_in, 'bounds', 'crs')
-
         if crs != src.crs:
             mis = '\nclip:\n \"crs\"不一致'
             raise Exception(mis)
@@ -815,7 +822,7 @@ def clip(raster_in,
 
 
 
-def zonal(raster_in, dst_in, stats,dic=None):
+def zonal(raster_in, dst_in, stats, dic=None):
     '''
     分区统计
     栅格统计栅格
@@ -881,14 +888,17 @@ def zonal(raster_in, dst_in, stats,dic=None):
         except:
             serice['name'] = area
 
-        value = df_src[df_dst.isin([area])].agg(stats,axis=0)
+        value = df_src[df_dst.isin([area])].agg(stats,axis=0)  # isin()解决np.nan不被 == 检索问题
         serice = pd.concat([serice,value])
         df_return = pd.concat([df_return,serice],axis=1)
     return df_return.T
 
 
 
-def unify(raster_in, dst_in, out_path=None, get_ds=True, **kwargs):
+def unify(raster_in, dst_in,
+          out_path=None, get_ds=True,
+          Extract=False, how='mode',
+          **kwargs):
     """
     统一栅格数据(空间参考、范围、行列数)
 
@@ -902,13 +912,24 @@ def unify(raster_in, dst_in, out_path=None, get_ds=True, **kwargs):
         输出地址. The default is None.
     get_ds : io.DatasetWriter, optional
         返回统一后的栅格数据(io.DatasetWriter). The default is True.
+    Extract : bool, optional
+        是否按有效值位置提取. The default is False
+    
+    how:(str or int) , optional.
+    重采样方式，The default is mode.
 
+    (部分)
+    mode:众数，6;
+    nearest:临近值，0;
+    bilinear:双线性，1;
+    cubic_spline:三次卷积，3。
+    ...其余见rasterio.enums.Resampling
+    
 
 
     **kwargs:
         接收调用函数(reproject、clip、resampling)的其他参数.
-        e.g.how(重采样方法，默认mode众数),
-            Extract(是否按有效值范围提取，默认True)
+        e.g. printf(resampling中：如果发生重采样，则会打印原形状及printf值。The default is False.)
 
     Returns
     -------
@@ -918,10 +939,22 @@ def unify(raster_in, dst_in, out_path=None, get_ds=True, **kwargs):
 
     """
     
+    
+    
+    # 是否按有效值位置提取
+    if Extract:
+        ds = unify(raster_in=raster_in, dst_in=dst_in, how=how, Extract=False, out_path=None, get_ds=True, **kwargs)
+        kwargs_extract = {}  # 设置默认参数
+        kwargs_extract.update({k: v for k, v in kwargs.items() if k in inspect.getfullargspec(extract)[0]}) #接收其他参数 
+        
+        return extract(raster_in=ds, dst_in=dst_in,out_path=out_path,get_ds=get_ds,**kwargs_extract)
+    
+    # 获得栅格变量
+    src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
+    dst = dst_in if type(dst_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(dst_in)
     # 检查哪些属性需要统一
-    judge,dif = check(raster_in,dst_in)
+    judge,dif = check(src,dst)
     if judge:
-        src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
         profile = src.profile
         arr = src.read()
         return _return(out_path,get_ds,arr,profile)
@@ -934,23 +967,33 @@ def unify(raster_in, dst_in, out_path=None, get_ds=True, **kwargs):
         run = 1
     else:
         raise Exception('有问题')
+        
 
-    shape = get_RasterArrt(dst_in, 'shape')
+    
+    shape = dst.shape
     
     
     ds = raster_in
     # 重投影（空间参考）
     if run == 3:
-        kwargs_reproject = {k: v for k, v in kwargs.items() if k in inspect.getfullargspec(reproject)[0]}  #接收其他参数 
-        ds = reproject(raster_in=ds, dst_in=dst_in,**kwargs_reproject)
+        kwargs_reproject = {}  # 设置默认参数
+        kwargs_reproject.update({k: v for k, v in kwargs.items() if k in inspect.getfullargspec(reproject)[0]})  #接收其他参数 
+        ds = reproject(raster_in=ds, dst_in=dst, how=how, **kwargs_reproject)
     # 裁剪（范围）
+    
     if run >= 2:
-        kwargs_clip = {'Extract':True}
+        kwargs_clip = {}  # 设置默认参数
         kwargs_clip.update({k: v for k, v in kwargs.items() if k in inspect.getfullargspec(clip)[0]}) #接收其他参数 
-        ds = clip(raster_in=ds, dst_in=dst_in,**kwargs_clip)
+        ds = clip(raster_in=ds, dst_in=dst,**kwargs_clip)
     # 重采样（行列数）
-    kwargs_resapilg = {k: v for k, v in kwargs.items() if k in inspect.getfullargspec(resampling)[0]}  #接收其他参数 
-    return resampling(raster_in=ds, out_path=out_path, get_ds=get_ds, re_shape=shape,**kwargs_resapilg)
+    kwargs_resapilg = {}  # 设置默认参数
+    kwargs_resapilg.update({k: v for k, v in kwargs.items() if k in inspect.getfullargspec(resampling)[0]})  #接收其他参数 
+    return resampling(raster_in=ds, out_path=out_path,how=how, get_ds=get_ds, re_shape=shape, re_size=False, re_scale=None, **kwargs_resapilg)
+    
+    
+        
+    
+    
 
 
 def clip_u(raster_in,dst_in=None,bounds=None,
@@ -1075,7 +1118,7 @@ def zonal_u(raster_in, dst_in, stats,dic=None,**kwargs):
     dst_in : TYPE
         分区数据栅格
     stats : 
-       统计类型。基于df.agg(stats) .e.g. 'mean' or ['mean','sum','max']...
+       统计类型。基于df.agg(stats). e.g. 'mean' or ['mean','sum','max']...
     
     dic : dict
         分区数据栅格各值对应属性，默认为值本身
@@ -1089,7 +1132,7 @@ def zonal_u(raster_in, dst_in, stats,dic=None,**kwargs):
 
     '''
     
-    ds = unify(dst_in, raster_in,**kwargs)
+    ds = unify(dst_in, raster_in, out_path=None, **kwargs)
     return zonal(raster_in=raster_in,dst_in=ds, stats=stats,dic=dic)
     
     
@@ -1104,18 +1147,25 @@ if __name__ == '__main__':
     
     raster_in = r'F:/PyCharm/pythonProject1/arcmap/015温度/土地利用/landuse_4y/1981-5km-tiff.tif'
 
-    dst_in = r'F:/PyCharm/pythonProject1/arcmap/014/clip/grand_average.tif'
+    dst_in = r'F:\PyCharm\pythonProject1\arcmap\007那曲市\data\eva平均\eva_2.tif'
 
-    out_path = r'F:\PyCharm\pythonProject1\arcmap\015温度\土地_unify\1981-5km-tiff.tif'
+    out_path = r'F:\PyCharm\pythonProject1\代码\mycode\测试文件\1981-5km-tiff3.tif'
     
     out_path1 = r'F:\PyCharm\pythonProject1\arcmap\015温度\zonal\grand_average.xlsx'
 
-
+    
 
     # ds = unify(out_path, raster_in, how='mode',Extract=True)
 
-    # ds = unify(dst_in, raster_in, how='mode',Extract=True)
+    ds = unify(raster_in, dst_in, how='mode',Extract=1)
     
+    
+    # dst = extract(raster_in=ds, dst_in=dst_in)
+    out_ds(ds, out_path)
+    
+    
+    
+    check(ds,dst_in)
     # df = zonal(out_path,dst_in, ['mean','max'],dic={1:'森林'})
 
     # extract(raster_in, dst_in)
