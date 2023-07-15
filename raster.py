@@ -105,7 +105,7 @@ def add_attrs_raster(src, ds={}, **kwargs):
 
 
 
-def check(raster_in, dst_in, need=None,printf=False, *args):
+def check(raster_in, dst_in,*args, need=None,printf=False):
     '''
     检验栅格数据是否统一
     (空间参考、范围、栅格行列数)
@@ -152,7 +152,27 @@ def check(raster_in, dst_in, need=None,printf=False, *args):
     else:
         return False,diffe
     
+
+
+def copy(raster_in, out_path):
+    with rasterio.open(raster_in) as src:
+        out_ds(ds=src,out_path=out_path)
     
+
+
+def check_flip(src,n=1):
+    bounds = src.bounds
+    if bounds[1] > bounds[3]:
+        bounds = [bounds[0],bounds[3],bounds[2],bounds[1]]
+        src_arr = np.flip(src.read(),axis=1) 
+    else:
+        src_arr = src.read()
+    if n == 1:
+        return src_arr
+    elif n == 2:
+        return src_arr, bounds
+
+   
 
 def _return(out_path,get_ds,arr=None,profile=None,ds=None):
     if ds:
@@ -160,8 +180,8 @@ def _return(out_path,get_ds,arr=None,profile=None,ds=None):
         arr = ds.read()
     
     if out_path:
-        with rasterio.open(out_path, 'w', **profile) as ds:
-            ds.write(arr)
+        out(out_path=out_path,data=arr, profile=profile)
+        
     elif get_ds:
         ds = create_raster(**profile)
         ds.write(arr)
@@ -285,7 +305,7 @@ def read(raster_in,
     shape = arr.shape
     profile = src.profile
     profile.update({'dtype': dtype,
-                    'nodate': nan})
+                    'nodata': nan})
     
     # 变形，无效值处理
     df = pd.DataFrame(arr.reshape(-1, 1))
@@ -333,6 +353,8 @@ def out(out_path, data, profile):
 
     with rasterio.open(out_path, 'w', **profile) as src:
         src.write(data)
+
+
 
 
 def out_ds(ds, out_path):
@@ -661,8 +683,8 @@ def extract(raster_in, dst_in,
     profile = src.profile
     nodata = src.nodata
     
-    # uint8格式，None无法输出
-    if (profile['dtype'] == 'uint8') & (nodata == None) :
+    # uint格式，None无法输出
+    if ('uint' in str(profile['dtype'])) & (nodata == None) :
         profile.update({'dtype':np.float64,'nodata': np.nan})
         nodata = np.nan
     arr = src.read()
@@ -679,8 +701,6 @@ def extract(raster_in, dst_in,
         return ds
     else:
         return arr, profile
-
-
 
 
 
@@ -746,7 +766,19 @@ def clip(raster_in,
         raise Exception(mis)
 
     xsize, ysize, bounds_src, profile, nodata = get_RasterArrt(src, 'xsize', 'ysize', 'bounds', 'profile', 'nodata')
+    
+    if bounds[1] > bounds[3]:
+        bounds = [bounds[0],bounds[3],bounds[2],bounds[1]]
+        
+        
+    if bounds_src[1] > bounds_src[3]:
+        bounds_src = [bounds_src[0],bounds_src[3],bounds_src[2],bounds_src[1]]
+        src_arr = np.flip(src.read(),axis=1)
 
+    else:
+        src_arr = src.read()
+
+    
     # 判断是否有交集
     inter = (max(bounds[0], bounds_src[0]),  # west
              max(bounds[1], bounds_src[1]),  # south
@@ -762,14 +794,14 @@ def clip(raster_in,
         
     
     
-    # uint8格式，None无法输出
-    if (profile['dtype'] == 'uint8') & (nodata == None) :
+    # uint格式，None无法输出
+    if ('uint' in str(profile['dtype'])) & (nodata == None) :
          profile.update({'dtype':np.float64,'nodata': np.nan})
          nodata = np.nan
 
     if inner:
         # 取相交范围
-        src_arr = src.read()
+        # src_arr = src.read()
         a = int((inter[0] - bounds_src[0]) / xsize)
         b = int((bounds_src[3] - inter[1]) / ysize)
         c = int((inter[2] - bounds_src[0]) / xsize)
@@ -804,7 +836,7 @@ def clip(raster_in,
         union_arr = np.full(union_shape, nodata, object)
     
         # 填入源数据栅格值
-        src_arr = src.read()
+        # src_arr = src.read()
     
         a = int((bounds_src[0] - union[0]) / xsize)
         d = int((union[3] - bounds_src[3]) / ysize)
@@ -938,6 +970,73 @@ def zonal(raster_in, dst_in, stats, dic=None):
         serice = pd.concat([serice,value])
         df_return = pd.concat([df_return,serice],axis=1)
     return df_return.T
+
+
+
+
+def three_sigma(raster_in,dst_in,out_path=None, get_ds=True):
+    '''
+    三倍标准差剔除离散值
+
+    Parameters
+    ----------
+    raster_in : TYPE
+        DESCRIPTION.
+    dst_in : TYPE
+        DESCRIPTION.
+    out_path : TYPE, optional
+        DESCRIPTION. The default is None.
+    get_ds : TYPE, optional
+        DESCRIPTION. The default is True.
+
+    Raises
+    ------
+    Exception
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    '''
+    
+    src = raster_in if type(raster_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(raster_in)
+    dst = dst_in if type(dst_in) in (i[1] for i in inspect.getmembers(rasterio.io)) else rasterio.open(dst_in)
+    
+    
+    judge,dif = check(src, dst)
+
+    if not judge:
+        
+        mis = '\nextract 无法正确提取:\n'
+        for i in dif:
+            mis += f'\n    \"{i}\" 不一致'
+        mis += '\n\n----<请统一以上属性>'
+        raise Exception(mis)
+    
+    
+    
+    
+    df_src,profile = read(src,2)
+    df_dst = read(dst)
+    
+    areas = list(df_dst[0].unique())
+    if len(areas) >= 1000:
+        warnings.warn('\n分区数为%d,分区栅格可能为浮点型栅格'%len(areas))
+    
+    for area in areas:
+        df_x = df_src[df_dst==area]
+        mean = df_x[0].mean()
+        std = df_x[0].std()
+        
+        df_src[(df_x[0] < mean - 3 * std) | (df_x[0] > mean + 3 * std)] = np.nan
+    
+    _return(out_path, get_ds, arr=df_src, profile=profile)
+
+
+
+
+
 
 
 
@@ -1123,6 +1222,8 @@ def clip_u(raster_in,
     
     if src_crs != dst_crs:
         ds = reproject(dst_in,raster_in)
+    else:
+        ds = dst_in
     
     # 调用clip函数
     return clip(raster_in=raster_in, dst_in=ds,inner=inner,mask=mask, Extract=Extract, out_path=out_path, get_ds=get_ds) 
